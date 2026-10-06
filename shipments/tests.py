@@ -368,3 +368,77 @@ class SameVesselTests(TestCase):
         self.assertFalse(same_vessel("MAERSK HIDALGO", "MSC GÜLSÜN"))
         self.assertFalse(same_vessel("COSCO GEMINI", "COSCO GEMINI", "9783538", "9123456"))
         self.assertTrue(same_vessel("A", "B", "9783538", "9783538"))
+
+
+SAFECUBE_SAMPLE = {
+    "metadata": {"shipmentType": "BL", "shipmentNumber": "QGD3466869", "sealine": "CMDU", "shippingStatus": "IN_TRANSIT"},
+    "route": {
+        "pol": {"location": {"name": "Qingdao", "locode": "CNQDG"}, "date": "2026-09-24T08:00:00Z", "actual": True, "predictiveEta": None},
+        "pod": {"location": {"name": "Rotterdam", "locode": "NLRTM"}, "date": "2026-11-03T07:00:00Z", "actual": False, "predictiveEta": None},
+    },
+    "vessels": [{"name": "COSCO SHIPPING GEMINI", "imo": 9783538}],
+    "containers": [{
+        "number": "SZLU5121564",
+        "events": [
+            {"status": "CLL", "eventCode": "LOAD", "date": "2026-09-23T19:08:00Z", "isActual": True,
+             "vessel": {"name": "COSCO SHIPPING GEMINI", "imo": 9783538}, "voyage": "0FAO1W1MA", "location": {"locode": "CNQDG"}},
+            {"status": "VAD", "eventCode": "ARRI", "date": "2026-11-03T07:00:00Z", "isActual": False,
+             "vessel": {"name": "COSCO SHIPPING GEMINI", "imo": 9783538}, "voyage": "0FAO2E1MA",
+             "location": {"locode": "NLRTM"}, "facility": {"name": "ECT Euromax"}},
+        ],
+    }],
+}
+
+
+@override_settings(SAFECUBE_API_KEY="sk-test", SAFECUBE_BASE_URL="https://api.example.com/ct/v2", SAFECUBE_API_KEY_HEADER="API_KEY")
+class SafecubeTests(TestCase):
+    def setUp(self):
+        customer = Customer.objects.create(name="EUROFOODLINK")
+        line = ShippingLine.objects.create(name="CMA CGM", scac="CMDU", tracking_provider="safecube")
+        self.shipment = SeaShipment.objects.create(customer=customer, shipping_line=line, container_number="SZLU5121564",
+                                                   bl_number="QGD3466869", vessel_name="COSCO GEMINI")
+
+    def test_request_and_parse(self):
+        resp = mock.Mock(status_code=200, json=lambda: SAFECUBE_SAMPLE, text="")
+        with mock.patch("shipments.tracking.safecube.requests.get", return_value=resp) as get:
+            update = refresh_shipment(self.shipment)
+        self.assertTrue(update.success, update.message)
+        params = get.call_args.kwargs["params"]
+        self.assertEqual((params["shipmentNumber"], params["shipmentType"], params["sealine"]), ("QGD3466869", "BL", "CMDU"))
+        self.assertEqual(get.call_args.args[0], "https://api.example.com/ct/v2/shipment")
+        self.assertEqual(get.call_args.kwargs["headers"]["API_KEY"], "sk-test")
+        self.shipment.refresh_from_db()
+        self.assertEqual(self.shipment.vessel_name, "COSCO SHIPPING GEMINI")
+        self.assertFalse(self.shipment.vessel_changed)  # "COSCO GEMINI" is hetzelfde schip
+        self.assertEqual(self.shipment.voyage, "0FAO2E1MA")
+        self.assertEqual(self.shipment.vessel_imo, "9783538")
+        self.assertEqual(self.shipment.eta.isoformat(), "2026-11-03T07:00:00+00:00")
+        self.assertIsNone(self.shipment.ata)
+        self.assertEqual(self.shipment.port_of_loading, "Qingdao")
+        self.assertEqual(self.shipment.terminal, "ECT Euromax")
+
+    def test_no_info_yet_is_pending_and_timeout(self):
+        resp = mock.Mock(status_code=200, json=lambda: {"message": "SEALINE_HASNT_PROVIDE_INFO"}, text="")
+        with mock.patch("shipments.tracking.safecube.requests.get", return_value=resp):
+            update = refresh_shipment(self.shipment)
+        self.assertTrue(update.success)
+        self.assertIn("SEALINE_HASNT_PROVIDE_INFO", update.message)
+        with mock.patch("shipments.tracking.safecube.requests.get", return_value=mock.Mock(status_code=504, json=dict, text="")):
+            update = refresh_shipment(self.shipment)
+        self.assertTrue(update.success)
+
+    def test_bad_key(self):
+        resp = mock.Mock(status_code=401, json=lambda: {"message": "Invalid API key"}, text="")
+        with mock.patch("shipments.tracking.safecube.requests.get", return_value=resp):
+            update = refresh_shipment(self.shipment)
+        self.assertFalse(update.success)
+        self.assertIn("Invalid API key", update.message)
+
+    def test_refresh_all_respects_six_hours(self):
+        from .tracking.service import refresh_all
+
+        self.shipment.tracking_last_checked = timezone.now() - timedelta(hours=2)
+        self.shipment.save()
+        with mock.patch("shipments.tracking.safecube.requests.get") as get:
+            refresh_all()
+        get.assert_not_called()

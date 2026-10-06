@@ -54,6 +54,7 @@ class ShippingLine(TimeStampedModel):
         ("mock", "Demo / test (geen echte API)"),
         ("dcsa", "DCSA Track & Trace (REST)"),
         ("terminal49", "Terminal49 (alle rederijen via één API)"),
+        ("safecube", "Safecube / Sinay (alle rederijen via één API)"),
         ("none", "Geen automatische tracking"),
     ]
 

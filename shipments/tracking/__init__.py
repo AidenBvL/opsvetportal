@@ -9,11 +9,13 @@ from .base import TrackingError, TrackingResult  # noqa: F401
 from .dcsa import DCSAProvider
 from .mock import MockProvider
 from .terminal49 import Terminal49Provider, TrackingPending  # noqa: F401
+from .safecube import SafecubeProvider
 
 PROVIDERS = {
     "mock": MockProvider,
     "dcsa": DCSAProvider,
     "terminal49": Terminal49Provider,
+    "safecube": SafecubeProvider,
 }
 
 

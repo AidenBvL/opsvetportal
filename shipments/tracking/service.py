@@ -162,8 +162,18 @@ def refresh_all(queryset=None, stale_after=timedelta(hours=0)):
     )
     cutoff = timezone.now() - stale_after
     updates = []
+    from django.conf import settings
+
+    from . import PROVIDERS
+
+    now = timezone.now()
     for shipment in queryset.select_related("shipping_line", "customer", "handler"):
         if stale_after and shipment.tracking_last_checked and shipment.tracking_last_checked > cutoff:
+            continue
+        # Sommige bronnen verversen zelf maar elke paar uur; vaker vragen kost alleen tegoed.
+        key = (shipment.shipping_line.tracking_provider if shipment.shipping_line else "") or settings.TRACKING_DEFAULT_PROVIDER
+        min_hours = getattr(PROVIDERS.get(key), "min_interval_hours", 0)
+        if min_hours and shipment.tracking_last_checked and now - shipment.tracking_last_checked < timedelta(hours=min_hours):
             continue
         try:
             update = refresh_shipment(shipment)

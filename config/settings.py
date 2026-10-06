@@ -138,6 +138,9 @@ LOGOUT_REDIRECT_URL = "login"
 TRACKING_DEFAULT_PROVIDER = os.environ.get("TRACKING_DEFAULT_PROVIDER", "mock")
 TRACKING_HTTP_TIMEOUT = int(os.environ.get("TRACKING_HTTP_TIMEOUT", "20"))
 TERMINAL49_API_KEY = os.environ.get("TERMINAL49_API_KEY", "")
+SAFECUBE_API_KEY = os.environ.get("SAFECUBE_API_KEY", "")
+SAFECUBE_BASE_URL = os.environ.get("SAFECUBE_BASE_URL", "https://api.sinay.ai/container-tracking/api/v2")
+SAFECUBE_API_KEY_HEADER = os.environ.get("SAFECUBE_API_KEY_HEADER", "API_KEY")
 
 # --- Documentherkenning ------------------------------------------------------
 TESSERACT_CMD = os.environ.get("TESSERACT_CMD", "")

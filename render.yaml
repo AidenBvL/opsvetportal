@@ -23,6 +23,8 @@ services:
         value: terminal49
       - key: TERMINAL49_API_KEY
         sync: false
+      - key: SAFECUBE_API_KEY
+        sync: false
       - key: DJANGO_ADMIN_USERNAME
         sync: false
       - key: DJANGO_ADMIN_EMAIL
