@@ -43,6 +43,28 @@ def refresh_shipment(shipment: SeaShipment) -> TrackingUpdate | None:
             shipment=shipment, checked_at=now, provider=provider.name, success=False, message=str(exc)[:300]
         )
 
+    return apply_result(shipment, result, now)
+
+
+def _vessel_tokens(name):
+    import re
+
+    return set(re.sub(r"[^A-Z0-9 ]", " ", (name or "").upper()).split()) - {"MV", "M/V", "MS"}
+
+
+def same_vessel(name_a, name_b, imo_a="", imo_b=""):
+    """Zelfde schip? IMO is leidend; anders namen vergelijken ("COSCO GEMINI" = "COSCO SHIPPING GEMINI")."""
+    if imo_a and imo_b:
+        return str(imo_a) == str(imo_b)
+    a, b = _vessel_tokens(name_a), _vessel_tokens(name_b)
+    if not a or not b:
+        return True
+    return a <= b or b <= a
+
+
+def apply_result(shipment, result, now=None, provider_name=None):
+    """Verwerk een trackingresultaat (van een API of handmatig geplakt) in het dossier."""
+    now = now or timezone.now()
     messages = []
     old_eta = shipment.eta
     eta_changed = False
@@ -58,7 +80,7 @@ def refresh_shipment(shipment: SeaShipment) -> TrackingUpdate | None:
 
     new_vessel = (result.vessel_name or "").strip()
     if new_vessel:
-        if shipment.vessel_name and new_vessel.upper() != shipment.vessel_name.upper():
+        if shipment.vessel_name and not same_vessel(shipment.vessel_name, new_vessel, shipment.vessel_imo, result.vessel_imo):
             vessel_changed = True
             messages.append(f"Container verwisseld van schip: {shipment.vessel_name} → {new_vessel}")
             shipment.vessel_changed = True
@@ -72,6 +94,11 @@ def refresh_shipment(shipment: SeaShipment) -> TrackingUpdate | None:
         messages.append(f"Aangekomen op {timezone.localtime(result.ata):%d-%m %H:%M}")
         if shipment.status == "verwacht":
             shipment.status = "aangekomen"
+
+    for field in ("port_of_loading", "terminal"):
+        value = getattr(result, field, "")
+        if value and not getattr(shipment, field):
+            setattr(shipment, field, value)
 
     if result.eta_original:
         # De eerste ETA van de rederij is leidend voor de berekende vertraging.
@@ -93,7 +120,7 @@ def refresh_shipment(shipment: SeaShipment) -> TrackingUpdate | None:
     update = TrackingUpdate.objects.create(
         shipment=shipment,
         checked_at=now,
-        provider=result.provider,
+        provider=provider_name or result.provider,
         eta=result.eta,
         ata=result.ata,
         vessel_name=new_vessel,

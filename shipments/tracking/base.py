@@ -30,6 +30,8 @@ class TrackingResult:
     eta_original: datetime | None = None  # eerste ETA volgens de rederij
     discharged_at: datetime | None = None
     last_free_day: date | None = None  # laatste vrije dag (demurrage)
+    port_of_loading: str = ""
+    terminal: str = ""
 
     @property
     def vessels(self):

@@ -357,3 +357,14 @@ class Terminal49FreePlanTests(TestCase):
             update = refresh_shipment(shipment)
         self.assertIn("gratis plan", update.message)
         self.assertNotIn("ongeldig", update.message)
+
+
+class SameVesselTests(TestCase):
+    def test_name_variants_and_imo(self):
+        from .tracking.service import same_vessel
+
+        self.assertTrue(same_vessel("COSCO GEMINI", "COSCO SHIPPING GEMINI"))
+        self.assertTrue(same_vessel("MSC Gülsün", "MSC GÜLSÜN"))
+        self.assertFalse(same_vessel("MAERSK HIDALGO", "MSC GÜLSÜN"))
+        self.assertFalse(same_vessel("COSCO GEMINI", "COSCO GEMINI", "9783538", "9123456"))
+        self.assertTrue(same_vessel("A", "B", "9783538", "9783538"))
