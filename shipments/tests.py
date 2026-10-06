@@ -242,7 +242,7 @@ class Terminal49Tests(TestCase):
             update = refresh_shipment(self.shipment)
         self.assertEqual(req.call_args.kwargs["json"]["data"]["attributes"]["request_type"], "bill_of_lading")
         self.assertFalse(update.success)
-        self.assertIn("API-sleutel", update.message)
+        self.assertIn("403 bij POST /tracking_requests", update.message)
 
     def test_failed_request_is_reset(self):
         self.shipment.external_tracking_id = "tr:tr1"
@@ -328,3 +328,17 @@ class Terminal49ImprovementTests(TestCase):
         # 22:00 UTC is middernacht 24 oktober in Nederland (zomertijd).
         self.assertEqual(str(self.shipment.free_time_until), "2026-10-24")
         self.assertEqual(self.shipment.status, "aangekomen")
+
+
+@override_settings(TERMINAL49_API_KEY="test-key")
+class Terminal49ErrorMessageTests(TestCase):
+    def test_401_on_get_names_endpoint_and_detail(self):
+        customer = Customer.objects.create(name="K")
+        line = ShippingLine.objects.create(name="CMA CGM", scac="CMDU", tracking_provider="terminal49")
+        shipment = SeaShipment.objects.create(customer=customer, shipping_line=line, container_number="CSQU3054383",
+                                              external_tracking_id="tr:abc")
+        resp = mock.Mock(status_code=401, json=lambda: {"errors": [{"title": "Unauthorized", "detail": "Invalid token"}]}, text="")
+        with mock.patch("shipments.tracking.terminal49.requests.request", return_value=resp):
+            update = refresh_shipment(shipment)
+        self.assertIn("401 bij GET /tracking_requests/abc", update.message)
+        self.assertIn("Invalid token", update.message)

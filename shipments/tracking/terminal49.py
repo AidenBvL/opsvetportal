@@ -48,17 +48,22 @@ class Terminal49Provider(BaseProvider):
             response = requests.request(method, API + path, headers=self._headers(), timeout=settings.TRACKING_HTTP_TIMEOUT, **kwargs)
         except requests.RequestException as exc:
             raise TrackingError(f"Verbinding met Terminal49 mislukt: {exc}") from exc
-        if response.status_code in (401, 403):
-            raise TrackingError("Terminal49 weigert de API-sleutel (ongeldig, of API-toegang niet in dit abonnement).")
-        if response.status_code == 429:
-            raise TrackingError("Terminal49: te veel verzoeken, volgende ronde opnieuw.")
         if response.status_code >= 400:
             errors = []
             try:
-                errors = response.json().get("errors", [])
-            except ValueError:
+                errors = response.json().get("errors", []) or []
+            except (ValueError, AttributeError):
                 pass
-            detail = "; ".join(e.get("detail") or e.get("title", "") for e in errors) or response.text[:200]
+            detail = "; ".join(e.get("detail") or e.get("title", "") for e in errors if isinstance(e, dict)) or response.text[:150]
+            where = f"{method} {path.split('?')[0]}"
+            if response.status_code == 401:
+                raise TrackingError(f"Terminal49 401 bij {where}: API-sleutel ongeldig of verwijderd. "
+                                    f"Controleer TERMINAL49_API_KEY in Render. ({detail})"[:300])
+            if response.status_code == 403:
+                raise TrackingError(f"Terminal49 403 bij {where}: geen toegang tot deze gegevens, "
+                                    f"mogelijk niet in je abonnement. ({detail})"[:300])
+            if response.status_code == 429:
+                raise TrackingError("Terminal49: te veel verzoeken, volgende ronde opnieuw.")
             if response.status_code == 422 and any(e.get("code") == "duplicate" for e in errors):
                 raise DuplicateRequest(detail[:300])
             raise TrackingError(f"Terminal49 fout {response.status_code}: {detail}"[:300])
