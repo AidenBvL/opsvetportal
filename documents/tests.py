@@ -135,12 +135,14 @@ class UploadFlowTests(TestCase):
         self.assertFalse(Document.objects.exists())
 
 
-def _words(*rows):
-    """Bouw pdfplumber-achtige woorden: rows = (top, [(x0, tekst), ...])."""
+def _words(*rows, height=7):
+    """Bouw pdfplumber-achtige woorden: rows = (top, [(x0, tekst), ...]) of (top, [...], hoogte)."""
     words = []
-    for top, items in rows:
+    for row in rows:
+        top, items = row[0], row[1]
+        h = row[2] if len(row) > 2 else height
         for x0, text in items:
-            words.append({"text": text, "x0": x0, "x1": x0 + 5.2 * len(text), "top": top, "bottom": top + 7})
+            words.append({"text": text, "x0": x0, "x1": x0 + (4.9 if h < 10 else 6.6) * len(text), "top": top, "bottom": top + h})
     return words
 
 
@@ -180,7 +182,57 @@ SIGNED FOR THE CARRIER CMA CGM S.A.
 """
 
 
+# Uitsnede van een Hapag-Lloyd sea waybill: kleine labels met ':' en gemengde hoofdletters, waarden groter eronder.
+HAPAG_WORDS = _words(
+    (31, [(40, "Shipper:")]),
+    (40, [(43, "AGRICOLA"), (102, "ARIZTIA"), (155, "LTDA.")], 12),
+    (80, [(302, "Carrier’s"), (330, "Reference:"), (374, "SWB-No.:"), (510, "Page:")]),
+    (89, [(309, "10276183"), (381, "HLCUSCL260910263"), (518, "2")], 12),
+    (115, [(40, "Consignee:")]),
+    (124, [(43, "J.A."), (79, "TER"), (108, "MATEN,")], 12),
+    (283, [(40, "Vessel(s):"), (242, "Voyage-No.:")]),
+    (292, [(43, "COSCO"), (86, "SHIPPING"), (150, "SEINE"), (259, "6232N")], 12),
+    (295, [(302, "Place"), (320, "of"), (328, "Delivery:")]),
+    (319, [(40, "Port"), (55, "of"), (63, "Loading:")]),
+    (328, [(43, "SAN"), (72, "ANTONIO,"), (132, "CHILE")], 12),
+    (343, [(40, "Port"), (55, "of"), (63, "Discharge:")]),
+    (352, [(43, "ROTTERDAM,"), (115, "NETHERLANDS")], 12),
+    (700, [(40, "VESSEL"), (75, "NAME:"), (110, "OTHER"), (150, "SHIP"), (190, "VOYAGE:"), (240, "999X")]),
+)
+
+
 class LayoutTests(TestCase):
+    def test_label_meaning_not_per_carrier(self):
+        from .layout import classify
+
+        cases = {
+            "Port of Loading:": "port_of_loading", "PORT OF DISCHARGE": "port_of_discharge", "POD": "port_of_discharge",
+            "Vessel(s):": "vessel_name", "OCEAN VESSEL": "vessel_name", "Vessel / Voyage": "vessel_voyage",
+            "Voyage-No.:": "voyage", "VOYAGE NUMBER": "voyage", "SWB-No.:": "bl_number", "B/L No.": "bl_number",
+            "WAYBILL NUMBER": "bl_number", "NUMBER OF ORIGINAL WAYBILLS": None, "Booking No:": "booking_number",
+            "Carrier’s Reference:": "booking_number", "Consignee’s Reference:": "customer_reference",
+            "Consignee:": "consignee", "Notify Address (Carrier not responsible for failure to notify):": "notify",
+            "Place of Delivery:": None, "AS STATED BY SHIPPER": None,
+        }
+        for label, field in cases.items():
+            self.assertEqual(classify(label), field, label)
+
+    def test_hapag_style_labels(self):
+        fields = extract_layout_fields([HAPAG_WORDS])
+        self.assertEqual(fields["bl_number"], "HLCUSCL260910263")
+        self.assertEqual(fields["booking_number"], "10276183")
+        self.assertEqual(fields["vessel_name"], "COSCO SHIPPING SEINE")
+        self.assertEqual(fields["voyage"], "6232N")
+        self.assertEqual(fields["port_of_loading"], "SAN ANTONIO, CHILE")
+        self.assertEqual(fields["port_of_discharge"], "ROTTERDAM, NETHERLANDS")
+        self.assertEqual(fields["consignee"], "J.A. TER MATEN")
+        self.assertTrue(fields["shipper"].startswith("AGRICOLA ARIZTIA"))
+
+    def test_value_right_of_label(self):
+        fields = extract_layout_fields([_words((10, [(40, "VESSEL"), (75, "NAME:"), (105, "COSCO"), (135, "SEINE"),
+                                                    (165, "VOYAGE:"), (205, "6232N")]))])
+        self.assertEqual((fields["vessel_name"], fields["voyage"]), ("COSCO SEINE", "6232N"))
+
     def test_values_below_labels(self):
         fields = extract_layout_fields([WAYBILL_WORDS])
         self.assertEqual(fields["voyage"], "0EWOAN1MA")
@@ -200,6 +252,26 @@ class LayoutTests(TestCase):
         self.assertEqual(data["port_of_loading"], "BRPNG")
         self.assertEqual(data["containers"][0]["seal_number"], "K1108089")
         self.assertEqual((data["packages"], data["package_type"], data["gross_weight_kg"]), ("21", "CARTONS", "22909.950"))
+
+    def test_hapag_text_fields(self):
+        text = """HLBU 9848255 1600 BLOCKS 24400,000
+SEALS : 1 X 40 REEFER CONTAINER KGM
+HLK1844222
+Container Nos., Seal Nos.; Marks and Nos. Number and Kind of Packages, Description of Goods Gross Weight: Measurement:
+Cont/Seals/Marks Packages/Description of Goods Weight Measure
+24000,00 NET WEIGHT OF
+FROZEN CHICKEN LIVERS
+TEMPERATURE TO BE SET AT -20,0 C
+SHIPPED ON BOARD, DATE : 18.SEP.2026
+"""
+        data = extract_fields(text)
+        container = data["containers"][0]
+        self.assertEqual((container["container_number"], container["seal_number"]), ("HLBU9848255", "HLK1844222"))
+        self.assertEqual((data["packages"], data["package_type"], data["gross_weight_kg"]), ("1600", "BLOCKS", "24400.000"))
+        self.assertEqual(data["goods_description"], "FROZEN CHICKEN LIVERS")
+        self.assertEqual(data["temperature_setpoint"], "-20.0")
+        self.assertEqual(data["departed_at"], "2026-09-18")
+        self.assertEqual(merge_layout(data, {"port_of_loading": "SAN ANTONIO, CHILE"})["port_of_loading"], "CLSAI")
 
     def test_parse_number(self):
         self.assertEqual(parse_number("22909.950"), "22909.950")

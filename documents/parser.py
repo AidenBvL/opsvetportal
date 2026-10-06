@@ -56,7 +56,9 @@ def extract_text(path):
         import pdfplumber
 
         with pdfplumber.open(path) as pdf:
-            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            # Gedraaide tekst (watermerken, tekst langs de rand) laten we weg.
+            upright = [page.filter(lambda obj: obj.get("object_type") != "char" or obj.get("upright", True)) for page in pdf.pages]
+            text = "\n".join(page.extract_text() or "" for page in upright)
             if len(text.strip()) >= MIN_TEXT_LENGTH:
                 return text, "pdf-tekst"
             pages = [ocr_image(page.to_image(resolution=300).original) for page in pdf.pages]
@@ -78,7 +80,7 @@ CONTAINER_TYPE_PATTERN = re.compile(r"\b(20|40|45)\s*'?\s*(DV|DC|GP|HC|HQ|RF|RH|
 DATE_PATTERNS = [
     (re.compile(r"\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b"), "dmy"),
     (re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b"), "ymd"),
-    (re.compile(r"\b(\d{1,2})[\s\-]([A-Za-z]{3})[A-Za-z]*[\s\-,]+(\d{4})\b"), "dMy"),
+    (re.compile(r"\b(\d{1,2})[\s\-.]([A-Za-z]{3})[A-Za-z]*[\s\-.,]+(\d{4})\b"), "dMy"),
 ]
 MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "mrt": 3, "apr": 4, "may": 5, "mei": 5, "jun": 6, "jul": 7,
@@ -166,8 +168,15 @@ def find_containers(text):
         if number in seen or not is_valid_container_number(number):
             continue
         seen.add(number)
-        fragment = upper[match.end() : match.end() + 80]
-        seal = _first(r"(?:SEAL|ZEGEL)\s*(?:NO\.?|NR\.?|#)?\s*[:\-]?\s*([A-Z0-9]{5,15})", fragment)
+        fragment = upper[match.end() : match.end() + 120]
+        following = CONTAINER_PATTERN.search(fragment)
+        if following:
+            fragment = fragment[: following.start()]  # niet doorlezen in de regel van de volgende container
+        seal = ""
+        seal_label = re.search(r"\b(?:SEALS?|ZEGELS?)\b", fragment)
+        if seal_label:
+            # Eerste code na "SEAL": letters + cijfers of een lang getal (bijv. "SEALS : 1 X 40 REEFER ... HLK1844222").
+            seal = _first(r"\b([A-Z]{1,4}\d{5,12}|\d{6,12})\b", fragment[seal_label.end() : seal_label.end() + 80])
         item = {"container_number": number, "container_type": _container_type(fragment), "seal_number": seal}
         # Op de regel van de container: "1 x 40RH 21 CARTONS 22909.950 4650 25.200" -> colli en brutogewicht.
         line = fragment.split("\n", 1)[0]
@@ -185,7 +194,7 @@ def extract_fields(text):
     text = text or ""
     vessel_line = _first(r"(?:OCEAN\s+)?VESSEL(?:\s+NAME)?(?:\s*/\s*VOY(?:AGE)?)?\s*[:\-]\s*(.+)$", text)
     vessel, voyage = vessel_line, ""
-    split = re.match(r"(.+?)\s+(?:V\.?|VOY(?:AGE)?\.?(?:\s*NO\.?)?)\s*([A-Z0-9]{3,10})\s*$", vessel_line, re.I)
+    split = re.match(r"(.+?)\s+(?:V\.?|VOY(?:AGE)?\.?(?:\s*NO\.?)?)\s*[:\-]?\s*([A-Z0-9]{3,10})\s*$", vessel_line, re.I)
     if split:
         vessel, voyage = split.group(1), split.group(2)
     voyage = voyage or _first(r"\bVOY(?:AGE)?\.?\s*(?:NO\.?|NUMBER|NR\.?)?\s*[:\-]\s*([A-Z0-9]{3,12})\b", text)
@@ -210,8 +219,9 @@ def extract_fields(text):
         "customer_reference": _first(r"(?:YOUR|CUSTOMER|KLANT)\s*REF(?:ERENCE|ERENTIE)?\.?\s*[:\-]\s*([A-Z0-9\-/]{3,40})", text),
         "temperature_setpoint": temperature.replace(",", "."),
         "gross_weight_kg": parse_number(weight),
-        "goods_description": _first(r"(?:DESCRIPTION\s+OF\s+GOODS|GOEDERENOMSCHRIJVING|COMMODITY)\s*[:\-]?\s*([^\n]{3,120})", text)
-        or _goods_line(text),
+        "goods_description": _not_a_header(
+            _first(r"(?:DESCRIPTION\s+OF\s+GOODS|GOEDERENOMSCHRIJVING|COMMODITY)\s*[:\-]?\s*([^\n]{3,120})", text)
+        ) or _goods_line(text),
         "departed_at": "",
     }
     data["packages"], data["package_type"] = _packages(text)
@@ -233,9 +243,9 @@ def _not_a_label(value):
 
 def merge_layout(data, layout):
     """Waarden die via de opmaak (label boven waarde) zijn gevonden gaan voor op losse tekstpatronen."""
-    for field in ("bl_number", "booking_number", "vessel_name", "voyage", "port_of_loading", "port_of_discharge"):
+    for field in ("bl_number", "booking_number", "vessel_name", "voyage", "port_of_loading", "port_of_discharge", "customer_reference"):
         value = (layout.get(field) or "").strip()
-        if field in {"bl_number", "booking_number", "voyage"}:
+        if field in {"bl_number", "booking_number", "voyage", "customer_reference"}:
             value = value.split()[0] if value else ""
             if not re.fullmatch(r"(?=.*\d)[A-Z0-9\-/]{4,30}", value.upper()):
                 continue
@@ -249,6 +259,15 @@ def merge_layout(data, layout):
     for field in ("port_of_loading", "port_of_discharge"):
         data[field] = port_code(data.get(field, ""))
     return data
+
+
+def _not_a_header(value):
+    """Na "Description of Goods" volgt vaak nog een kolomkop ("Gross Weight", "Measurement") in plaats van de waarde."""
+    header_words = r"\b(?:WEIGHT|MEASURE(?:MENT)?|PACKAGES?|GROSS|MARKS|NOS|CBM|KGS?|TARE|SEALS?|CONTAINERS?)\b"
+    words = re.findall(r"[A-Za-z]+", value)
+    if not words or len(re.findall(header_words, value, re.I)) * 2 >= len(words):
+        return ""
+    return value
 
 
 def _goods_line(text):
