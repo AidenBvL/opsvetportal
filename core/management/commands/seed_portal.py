@@ -37,9 +37,13 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--demo", action="store_true", help="Voeg voorbeeldklanten, -keurpunten en -dossiers toe.")
+        parser.add_argument("--if-empty", action="store_true", help="Alleen uitvoeren als er nog geen medewerkers zijn (veilig bij elke start).")
 
     def handle(self, *args, **options):
         setup_roles()
+        if options["if_empty"] and Employee.objects.exists():
+            self.stdout.write("Al gevuld; alleen rollen bijgewerkt.")
+            return
         departments = {name: Department.objects.get_or_create(name=name)[0] for name in DEPARTMENTS}
         for name, title, groups, wfh, off, pool, no_shift, pref in TEAM:
             employee, _ = Employee.objects.update_or_create(

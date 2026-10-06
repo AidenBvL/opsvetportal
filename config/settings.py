@@ -18,6 +18,10 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-m
 DEBUG = env_bool("DJANGO_DEBUG", True)
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
 CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o]
+# Render (en vergelijkbare hosts) geven de publieke hostnaam door; die wordt automatisch toegestaan.
+if os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
+    ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
+    CSRF_TRUSTED_ORIGINS.append(f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -38,6 +42,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -106,6 +111,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 MEDIA_URL = "media/"
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
 
@@ -126,6 +135,7 @@ LOGOUT_REDIRECT_URL = "login"
 # Standaard provider voor rederijen zonder eigen configuratie: "mock" of "dcsa".
 TRACKING_DEFAULT_PROVIDER = os.environ.get("TRACKING_DEFAULT_PROVIDER", "mock")
 TRACKING_HTTP_TIMEOUT = int(os.environ.get("TRACKING_HTTP_TIMEOUT", "20"))
+TERMINAL49_API_KEY = os.environ.get("TERMINAL49_API_KEY", "")
 
 # --- Documentherkenning ------------------------------------------------------
 TESSERACT_CMD = os.environ.get("TESSERACT_CMD", "")
@@ -151,6 +161,8 @@ EMAIL_BACKEND = os.environ.get(
 )
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "OPS/VET Portaal <noreply@example.com>")
 # Basis-URL voor links in e-mails, bijv. https://portaal.example.nl
-PORTAL_BASE_URL = os.environ.get("PORTAL_BASE_URL", "http://localhost:8000").rstrip("/")
+PORTAL_BASE_URL = os.environ.get("PORTAL_BASE_URL", os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:8000")).rstrip("/")
+# Geheim token voor /cron/<token>/ (gratis hosting zonder achtergrondproces).
+CRON_TOKEN = os.environ.get("CRON_TOKEN", "")
 # Tijdstip (HH:MM) waarop het dagoverzicht en de dienstherinneringen worden verstuurd.
 DAILY_DIGEST_TIME = os.environ.get("DAILY_DIGEST_TIME", "07:30")

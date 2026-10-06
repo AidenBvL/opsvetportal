@@ -1,0 +1,43 @@
+# Render Blueprint: in Render kies je "New > Blueprint" en koppel je deze GitHub-repo.
+# Alle geheimen (sync: false) vul je daarna in het Render-dashboard in, nooit in deze file.
+services:
+  - type: web
+    name: opsvet-portaal
+    runtime: docker
+    plan: free
+    healthCheckPath: /accounts/login/
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: CRON_TOKEN
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: opsvet-db
+          property: connectionString
+      - key: TRACKING_DEFAULT_PROVIDER
+        value: terminal49
+      - key: TERMINAL49_API_KEY
+        sync: false
+      - key: DJANGO_ADMIN_USERNAME
+        sync: false
+      - key: DJANGO_ADMIN_EMAIL
+        sync: false
+      - key: DJANGO_ADMIN_PASSWORD
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+
+databases:
+  - name: opsvet-db
+    plan: free
+    databaseName: opsvet
+    user: opsvet

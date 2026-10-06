@@ -13,4 +13,4 @@ RUN DJANGO_DEBUG=1 python manage.py collectstatic --noinput
 
 ENV DJANGO_DEBUG=0
 EXPOSE 8000
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py setup_roles && gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 3"]
+CMD ["sh", "start.sh"]

@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from core import cron
 from core.views import DashboardView
 
 admin.site.site_header = "OPS/VET Portaal - beheer"
@@ -27,6 +28,7 @@ urlpatterns = [
     path("zendingen/", include("shipments.urls")),
     path("documenten/", include("documents.urls")),
     path("admin/", admin.site.urls),
+    path("cron/<str:token>/", cron.run, name="cron"),
 ]
 
 if settings.DEBUG:

@@ -2,7 +2,7 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse
 
-PUBLIC_PREFIXES = ("/accounts/login/", "/accounts/wachtwoord-vergeten/", "/accounts/reset/", "/static/", "/agenda/ics/", "/admin/login/")
+PUBLIC_PREFIXES = ("/accounts/login/", "/accounts/wachtwoord-vergeten/", "/accounts/reset/", "/static/", "/agenda/ics/", "/admin/login/", "/cron/")
 
 
 class LoginRequiredMiddleware:

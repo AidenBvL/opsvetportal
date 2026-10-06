@@ -3,7 +3,7 @@ from datetime import timezone as dt_timezone
 from unittest import mock
 
 from django.contrib.auth.models import Permission, User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from actions.models import Action
@@ -192,3 +192,84 @@ class OAuthProviderTests(TestCase):
         self.assertEqual(post.call_count, 1)
         self.assertEqual(get.call_args.kwargs["headers"]["Authorization"], "Bearer abc")
         self.assertEqual(get.call_args.kwargs["headers"]["Consumer-Key"], "id")
+
+
+@override_settings(TERMINAL49_API_KEY="test-key")
+class Terminal49Tests(TestCase):
+    def setUp(self):
+        customer = Customer.objects.create(name="K")
+        line = ShippingLine.objects.create(name="Maersk", scac="MAEU", tracking_provider="terminal49")
+        self.shipment = SeaShipment.objects.create(customer=customer, shipping_line=line, container_number="CSQU3054383",
+                                                   vessel_name="MAERSK HIDALGO", eta=timezone.now() + timedelta(days=3))
+
+    @staticmethod
+    def response(payload, status=200):
+        return mock.Mock(status_code=status, json=lambda: payload, text=str(payload))
+
+    def test_full_flow_request_pending_then_data(self):
+        created = self.response({"data": {"id": "tr1", "type": "tracking_request", "attributes": {"status": "pending"}, "relationships": {}}}, 201)
+        with mock.patch("shipments.tracking.terminal49.requests.request", return_value=created) as req:
+            update = refresh_shipment(self.shipment)
+        self.assertTrue(update.success)
+        self.assertIn("Aangemeld bij Terminal49", update.message)
+        method, url = req.call_args.args
+        self.assertEqual((method, url), ("POST", "https://api.terminal49.com/v2/tracking_requests"))
+        body = req.call_args.kwargs["json"]["data"]["attributes"]
+        self.assertEqual(body, {"request_type": "container", "request_number": "CSQU3054383", "scac": "MAEU"})
+        self.assertEqual(req.call_args.kwargs["headers"]["Authorization"], "Token test-key")
+        self.shipment.refresh_from_db()
+        self.assertEqual(self.shipment.external_tracking_id, "tr:tr1")
+
+        ready = self.response({"data": {"id": "tr1", "attributes": {"status": "created"},
+                                        "relationships": {"tracked_object": {"data": {"id": "shp9", "type": "shipment"}}}}})
+        shipment_payload = self.response({
+            "data": {"id": "shp9", "attributes": {"pod_eta_at": "2026-10-20T06:00:00Z", "pod_vessel_name": "MSC GÜLSÜN",
+                                                   "pod_vessel_imo": "9839430", "pod_voyage_number": "FL636R", "pod_ata_at": None}},
+            "included": [{"type": "container", "attributes": {"number": "CSQU3054383", "pod_arrived_at": None}}],
+        })
+        with mock.patch("shipments.tracking.terminal49.requests.request", side_effect=[ready, shipment_payload]):
+            update = refresh_shipment(self.shipment)
+        self.shipment.refresh_from_db()
+        self.assertEqual(self.shipment.external_tracking_id, "shp:shp9")
+        self.assertTrue(update.vessel_changed)
+        self.assertEqual(self.shipment.vessel_name, "MSC GÜLSÜN")
+        self.assertEqual(self.shipment.voyage, "FL636R")
+
+    def test_uses_bl_and_reports_bad_key(self):
+        self.shipment.bl_number = "MAEU254123987"
+        self.shipment.save()
+        with mock.patch("shipments.tracking.terminal49.requests.request", return_value=self.response({"errors": []}, 403)) as req:
+            update = refresh_shipment(self.shipment)
+        self.assertEqual(req.call_args.kwargs["json"]["data"]["attributes"]["request_type"], "bill_of_lading")
+        self.assertFalse(update.success)
+        self.assertIn("API-sleutel", update.message)
+
+    def test_failed_request_is_reset(self):
+        self.shipment.external_tracking_id = "tr:tr1"
+        self.shipment.save()
+        failed = self.response({"data": {"id": "tr1", "attributes": {"status": "failed", "failed_reason": "not_found"}, "relationships": {}}})
+        with mock.patch("shipments.tracking.terminal49.requests.request", return_value=failed):
+            update = refresh_shipment(self.shipment)
+        self.shipment.refresh_from_db()
+        self.assertFalse(update.success)
+        self.assertEqual(self.shipment.external_tracking_id, "")
+
+    @override_settings(TERMINAL49_API_KEY="")
+    def test_missing_key(self):
+        update = refresh_shipment(self.shipment)
+        self.assertIn("TERMINAL49_API_KEY", update.message)
+
+
+class CronEndpointTests(TestCase):
+    @override_settings(CRON_TOKEN="geheim")
+    def test_token_required_and_runs_jobs(self):
+        self.assertEqual(self.client.get("/cron/fout/").status_code, 404)
+        with mock.patch("core.cron.call_command") as call:
+            r = self.client.get("/cron/geheim/")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("tracking", r.json()["ran"])
+        self.assertIn("refresh_tracking", [c.args[0] for c in call.call_args_list])
+
+    @override_settings(CRON_TOKEN="")
+    def test_disabled_without_token(self):
+        self.assertEqual(self.client.get("/cron/x/").status_code, 404)

@@ -93,6 +93,7 @@ class SeaShipment(TimeStampedModel):
     tracking_enabled = models.BooleanField("automatische tracking", default=True)
     tracking_last_checked = models.DateTimeField("laatst gecontroleerd", null=True, blank=True)
     tracking_last_error = models.CharField("laatste trackingfout", max_length=300, blank=True)
+    external_tracking_id = models.CharField("extern tracking-ID", max_length=60, blank=True, editable=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     class Meta:

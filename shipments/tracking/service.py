@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from . import TrackingError, get_provider
+from . import TrackingError, TrackingPending, get_provider
 from ..models import SeaShipment, TrackingUpdate
 
 log = logging.getLogger(__name__)
@@ -30,6 +30,11 @@ def refresh_shipment(shipment: SeaShipment) -> TrackingUpdate | None:
         return None
     try:
         result = provider.track(shipment)
+    except TrackingPending as exc:
+        shipment.tracking_last_checked = now
+        shipment.tracking_last_error = ""
+        shipment.save(update_fields=["tracking_last_checked", "tracking_last_error"])
+        return TrackingUpdate.objects.create(shipment=shipment, checked_at=now, provider=provider.name, message=str(exc)[:300])
     except TrackingError as exc:
         shipment.tracking_last_checked = now
         shipment.tracking_last_error = str(exc)[:300]
