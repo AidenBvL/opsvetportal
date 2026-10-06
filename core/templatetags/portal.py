@@ -46,6 +46,22 @@ def euro(value):
     return f"€ {formatted}"
 
 
+@register.filter
+def port(value):
+    """UN/LOCODE als "Paranaguá (BRPNG)"; een onbekende haven blijft zoals hij is."""
+    from core.ports import port_label
+
+    return port_label(value)
+
+
+@register.filter
+def port_name(value):
+    """Alleen de naam (voor krappe plekken); de code als de haven onbekend is."""
+    from core.ports import port_index
+
+    return port_index()["codes"].get((value or "").upper(), value)
+
+
 @register.simple_tag
 def obj_url(url_name, obj):
     return reverse(url_name, args=[obj.pk])

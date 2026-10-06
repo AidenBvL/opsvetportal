@@ -1,5 +1,5 @@
 from django.contrib import admin
 
-from .models import Customer, InspectionPoint, RoadCarrier, ShippingLine
+from .models import Customer, InspectionPoint, Port, RoadCarrier, ShippingLine
 
-admin.site.register([Customer, InspectionPoint, RoadCarrier, ShippingLine])
+admin.site.register([Customer, InspectionPoint, Port, RoadCarrier, ShippingLine])

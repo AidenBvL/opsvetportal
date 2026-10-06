@@ -31,6 +31,8 @@ class TrackingResult:
     discharged_at: datetime | None = None
     last_free_day: date | None = None  # laatste vrije dag (demurrage)
     port_of_loading: str = ""
+    port_of_discharge: str = ""
+    gate_out_at: datetime | None = None  # container opgehaald door/naar de ontvanger
     departed_at: datetime | None = None
     terminal: str = ""
 

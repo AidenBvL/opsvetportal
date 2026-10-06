@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, time
+from decimal import Decimal
 from urllib.parse import quote
 
 from django.contrib import messages
@@ -74,6 +75,8 @@ class ReviewView(PermissionRequiredMixin, generic.FormView):
         if d.get("eta"):
             eta = timezone.make_aware(datetime.combine(datetime.fromisoformat(d["eta"]).date(), time(8)))
         departed = d.get("departed_at") or None
+        # Bij meerdere containers is het gewicht in de tekst meestal het totaal: dan per container uit het document.
+        single = len(d.get("containers", [])) <= 1
         return {
             "customer": self.document.customer_id or d.get("customer_id"),
             "departed_at": departed and datetime.fromisoformat(departed).date(),
@@ -90,6 +93,9 @@ class ReviewView(PermissionRequiredMixin, generic.FormView):
             "ched_number": d.get("ched_number", ""),
             "goods_description": d.get("goods_description", ""),
             "temperature_setpoint": d.get("temperature_setpoint") or None,
+            "gross_weight_kg": (d.get("gross_weight_kg") or None) if single else None,
+            "packages": (d.get("packages") or None) if single else None,
+            "package_type": d.get("package_type", "") if single else "",
             "inspection_required": True,
             "container_numbers": "\n".join(c["container_number"] for c in d.get("containers", [])),
         }
@@ -114,9 +120,13 @@ class ReviewView(PermissionRequiredMixin, generic.FormView):
         if data.get("departed_at"):
             data["departed_at"] = timezone.make_aware(datetime.combine(data["departed_at"], time(12)))
         fields = ["customer_reference", "cory_reference", "bl_number", "booking_number", "vessel_name", "voyage", "eta",
-                  "departed_at", "port_of_loading", "port_of_discharge", "ched_number", "goods_description", "temperature_setpoint"]
+                  "departed_at", "port_of_loading", "port_of_discharge", "ched_number", "goods_description", "temperature_setpoint",
+                  *CARGO_FIELDS]
         created, updated, shipments = 0, 0, []
+        multiple = len(data["container_numbers"]) > 1
+        all_data = data
         for number in data["container_numbers"]:
+            data = _with_container_cargo(all_data, details.get(number, {}), multiple)
             shipment = SeaShipment.objects.filter(container_number=number, status__in=SeaShipment.OPEN_STATUSES).first()
             if shipment:
                 for name in fields:
@@ -140,6 +150,7 @@ class ReviewView(PermissionRequiredMixin, generic.FormView):
                 created += 1
             self.document.sea_shipments.add(shipment)
             shipments.append(shipment)
+        data = all_data
         self.document.customer = data["customer"]
         self.document.status = "gekoppeld"
         self.document.save()
@@ -230,6 +241,21 @@ def unlink_from_shipment(request, pk, kind, shipment_pk):
     return redirect(reverse(detail_url, args=[shipment_pk]) + "#tab-docs")
 
 
+CARGO_FIELDS = ["gross_weight_kg", "packages", "package_type"]
+
+
+def _with_container_cargo(data, detail, multiple):
+    """Bij meerdere containers gaan gewicht en colli per container (uit het document) voor op het formulier."""
+    if not multiple:
+        return data
+    data = dict(data)
+    for name in CARGO_FIELDS:
+        value = detail.get(name)
+        if value:
+            data[name] = Decimal(value) if name == "gross_weight_kg" else int(value) if name == "packages" else value
+    return data
+
+
 def _shipment_values(data, fields):
-    nullable = {"eta", "departed_at", "temperature_setpoint"}
+    nullable = {"eta", "departed_at", "temperature_setpoint", "gross_weight_kg", "packages"}
     return {name: data.get(name) if name in nullable else (data.get(name) or "") for name in fields}

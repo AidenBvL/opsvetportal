@@ -2,7 +2,7 @@ import os
 
 from django import forms
 
-from shipments.forms import BulkContainerForm
+from shipments.forms import BulkContainerForm, PortInput
 
 from .models import Document
 
@@ -60,15 +60,20 @@ class ShipmentUploadForm(forms.Form):
 
 class DocumentReviewForm(BulkContainerForm):
     booking_number = forms.CharField(label="Boekingsnummer", required=False)
-    port_of_loading = forms.CharField(label="Laadhaven (POL)", required=False)
-    port_of_discharge = forms.CharField(label="Loshaven (POD)", required=False, initial="NLRTM")
+    port_of_loading = forms.CharField(label="Laadhaven (POL)", required=False, widget=PortInput())
+    port_of_discharge = forms.CharField(label="Loshaven (POD)", required=False, initial="NLRTM", widget=PortInput())
     departed_at = forms.DateField(
         label="Vertrokken (shipped on board)", required=False, widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
     )
     ched_number = forms.CharField(label="CHED-nummer", required=False)
     goods_description = forms.CharField(label="Goederenomschrijving", required=False)
     temperature_setpoint = forms.DecimalField(label="Temperatuur (°C)", required=False, max_digits=5, decimal_places=1)
+    gross_weight_kg = forms.DecimalField(label="Brutogewicht (kg)", required=False, max_digits=12, decimal_places=3,
+                                         help_text="Bij meerdere containers leeg laten: dan geldt het gewicht per container uit het document.")
+    packages = forms.IntegerField(label="Colli", required=False, min_value=0)
+    package_type = forms.CharField(label="Verpakking", required=False, max_length=40)
 
     field_order = ["customer", "customer_reference", "cory_reference", "shipping_line", "bl_number", "booking_number",
                    "vessel_name", "voyage", "departed_at", "eta", "port_of_loading", "port_of_discharge", "inspection_required",
-                   "inspection_point", "ched_number", "goods_description", "temperature_setpoint", "container_numbers"]
+                   "inspection_point", "ched_number", "goods_description", "temperature_setpoint", "gross_weight_kg", "packages", "package_type",
+                   "container_numbers"]

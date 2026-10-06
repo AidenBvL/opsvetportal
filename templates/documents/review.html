@@ -8,7 +8,7 @@
 {% if existing %}<div class="alert alert-info py-2 small">Deze containers bestaan al als open dossier en worden aangevuld i.p.v. dubbel aangemaakt: {% for s in existing %}<a href="{% url 'shipments:sea_detail' s.pk %}">{{ s.container_number }}</a> ({{ s.customer }}){% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
 <div class="row g-3">
 <div class="col-lg-7"><div class="card"><div class="card-header">Herkende gegevens - controleer en vul aan</div><div class="card-body">
-  {% if containers %}<div class="small mb-2">{% for c in containers %}<span class="badge text-bg-light text-dark border">{{ c.container_number }}{% if c.container_type %} · {{ c.container_type }}{% endif %}{% if c.seal_number %} · zegel {{ c.seal_number }}{% endif %}</span> {% endfor %}</div>{% endif %}
+  {% if containers %}<div class="small mb-2">{% for c in containers %}<span class="badge text-bg-light text-dark border">{{ c.container_number }}{% if c.container_type %} · {{ c.container_type }}{% endif %}{% if c.seal_number %} · zegel {{ c.seal_number }}{% endif %}{% if c.packages %} · {{ c.packages }} {{ c.package_type|lower }}{% endif %}{% if c.gross_weight_kg %} · {{ c.gross_weight_kg }} kg{% endif %}</span> {% endfor %}</div>{% endif %}
   {% if parties %}<div class="row g-2 small mb-3">{% for label, value in parties %}<div class="col-md-4"><div class="text-body-secondary text-uppercase" style="font-size:.7rem">{{ label }}</div><div style="white-space:pre-line">{{ value }}</div></div>{% endfor %}</div>{% endif %}
   <form method="post">{% csrf_token %}{% include "core/_form_fields.html" %}<button class="btn btn-primary"><i class="bi bi-check2-all"></i> Dossiers aanmaken / bijwerken</button></form>
 </div></div></div>

@@ -1,4 +1,5 @@
 import shutil
+from decimal import Decimal
 import tempfile
 from unittest import mock
 
@@ -11,7 +12,9 @@ from shipments.models import SeaShipment
 
 from .layout import extract_layout_fields
 from .models import Document
-from .parser import ExtractionError, extract_fields, extract_text, find_containers, match_master_data, merge_layout, parse_date
+from .parser import (
+    ExtractionError, extract_fields, extract_text, find_containers, match_master_data, merge_layout, parse_date, parse_number,
+)
 
 SAMPLE_BL = """
 MAERSK                                   BILL OF LADING
@@ -117,6 +120,8 @@ class UploadFlowTests(TestCase):
         self.assertEqual(s.shipping_line, self.line)
         self.assertEqual(s.ched_number, "CHEDP.NL.2026.0012345")
         self.assertEqual(s.seal_number, "ML123456")
+        # Twee containers en alleen een totaalgewicht: niet op elke container zetten.
+        self.assertIsNone(s.gross_weight_kg)
         self.assertEqual(list(document.sea_shipments.order_by("pk")), list(SeaShipment.objects.order_by("pk")))
 
         # Tweede keer verwerken vult aan in plaats van dubbel aanmaken.
@@ -192,7 +197,16 @@ class LayoutTests(TestCase):
         self.assertEqual(data["goods_description"], "FROZEN CHICKEN GIBLETS - LIVER")
         self.assertEqual(data["departed_at"], "2026-09-11")
         self.assertEqual(data["port_of_discharge"], "NLRTM")
+        self.assertEqual(data["port_of_loading"], "BRPNG")
         self.assertEqual(data["containers"][0]["seal_number"], "K1108089")
+        self.assertEqual((data["packages"], data["package_type"], data["gross_weight_kg"]), ("21", "CARTONS", "22909.950"))
+
+    def test_parse_number(self):
+        self.assertEqual(parse_number("22909.950"), "22909.950")
+        self.assertEqual(parse_number("24.580,00"), "24580.00")
+        self.assertEqual(parse_number("1,234,567.8"), "1234567.8")
+        self.assertEqual(parse_number("12,5"), "12.5")
+        self.assertEqual(parse_number("geen"), "")
 
     def test_customer_and_carrier_matching(self):
         maersk = ShippingLine.objects.create(name="Maersk", scac="MAEU")
@@ -260,6 +274,20 @@ class ShipmentDocumentTests(TestCase):
         self.client.post(f"/documenten/{document.pk}/opnieuw/")
         document.refresh_from_db()
         self.assertEqual(document.status, "verwerkt")
+
+    def test_review_takes_weight_and_packages(self):
+        self.shipment.container_number = "SEGU9074220"
+        self.shipment.save()
+        self.upload(SimpleUploadedFile("swb.txt", WAYBILL_TEXT.encode(), content_type="text/plain"), doc_type="bl")
+        document = Document.objects.get()
+        form = self.client.get(f"/documenten/{document.pk}/verwerken/").context["form"]
+        data = {k: v for k, v in form.initial.items() if v not in (None, "")}
+        data["customer"] = self.customer.pk
+        self.client.post(f"/documenten/{document.pk}/verwerken/", data)
+        self.shipment.refresh_from_db()
+        self.assertEqual(self.shipment.gross_weight_kg, Decimal("22909.950"))
+        self.assertEqual((self.shipment.packages, self.shipment.package_type), (21, "CARTONS"))
+        self.assertEqual(self.shipment.temperature_setpoint, Decimal("-22.0"))
 
     def test_rejects_unknown_type_and_requires_login(self):
         self.upload(SimpleUploadedFile("virus.exe", b"MZ"))

@@ -72,3 +72,30 @@ class CustomerTests(TestCase):
         admin = User.objects.create_superuser("admin", "a@example.com", "pw")
         self.client.force_login(admin)
         self.assertContains(self.client.get("/"), "Aankomsten komende 7 dagen")
+
+
+class PortTests(TestCase):
+    def test_port_code_variants(self):
+        from core.ports import port_code, port_label
+
+        self.assertEqual(port_code("PARANAGUA (BR)"), "BRPNG")
+        self.assertEqual(port_code("Paranaguá"), "BRPNG")
+        self.assertEqual(port_code("Rotterdam, Netherlands"), "NLRTM")
+        self.assertEqual(port_code("nl rtm"), "NLRTM")
+        self.assertEqual(port_code("ANTWERP"), "BEANR")
+        self.assertEqual(port_code("Manzanillo"), "Manzanillo")  # twee havens met die naam: niet raden
+        self.assertEqual(port_code("MANZANILLO (MX)"), "MXZLO")
+        self.assertEqual(port_code("Onbekende Haven"), "Onbekende Haven")
+        self.assertEqual(port_label("BRPNG"), "Paranaguá (BRPNG)")
+        self.assertEqual(port_label("Onbekende Haven"), "Onbekende Haven")
+
+    def test_new_port_recodes_open_shipments(self):
+        from core.models import Port
+        from shipments.models import SeaShipment
+
+        customer = Customer.objects.create(name="K")
+        shipment = SeaShipment.objects.create(customer=customer, container_number="CSQU3054383", port_of_loading="PUERTO NUEVO")
+        self.assertEqual(shipment.port_of_loading, "PUERTO NUEVO")
+        Port.objects.create(locode="XXPNV", name="Puerto Nuevo")
+        shipment.refresh_from_db()
+        self.assertEqual(shipment.port_of_loading, "XXPNV")
