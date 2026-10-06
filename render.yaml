@@ -5,6 +5,8 @@ services:
     name: opsvet-portaal
     runtime: docker
     plan: free
+    # Elke push naar de gekoppelde branch wordt automatisch gebouwd en live gezet.
+    autoDeploy: true
     healthCheckPath: /accounts/login/
     envVars:
       - key: DJANGO_DEBUG

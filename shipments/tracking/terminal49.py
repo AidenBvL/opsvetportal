@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 import requests
 from django.conf import settings
+from django.utils import timezone as dj_timezone
 
 from .base import BaseProvider, Leg, TrackingError, TrackingResult
 
@@ -17,6 +18,10 @@ API = "https://api.terminal49.com/v2"
 
 class TrackingPending(TrackingError):
     """De zending is aangemeld maar Terminal49 heeft nog geen gegevens."""
+
+
+class DuplicateRequest(TrackingError):
+    """Terminal49 kent deze zending al (aangemeld via het dashboard of een eerdere poging)."""
 
 
 def _dt(value):
@@ -48,11 +53,14 @@ class Terminal49Provider(BaseProvider):
         if response.status_code == 429:
             raise TrackingError("Terminal49: te veel verzoeken, volgende ronde opnieuw.")
         if response.status_code >= 400:
-            detail = ""
+            errors = []
             try:
-                detail = "; ".join(e.get("detail") or e.get("title", "") for e in response.json().get("errors", []))
+                errors = response.json().get("errors", [])
             except ValueError:
-                detail = response.text[:200]
+                pass
+            detail = "; ".join(e.get("detail") or e.get("title", "") for e in errors) or response.text[:200]
+            if response.status_code == 422 and any(e.get("code") == "duplicate" for e in errors):
+                raise DuplicateRequest(detail[:300])
             raise TrackingError(f"Terminal49 fout {response.status_code}: {detail}"[:300])
         return response.json()
 
@@ -62,18 +70,36 @@ class Terminal49Provider(BaseProvider):
             raise TrackingError("Vul de SCAC-code van de rederij in (bijv. MAEU); Terminal49 heeft die nodig.")
         return line.scac.upper()
 
-    def _create_request(self, shipment):
+    def _request_number(self, shipment):
+        """B/L is het betrouwbaarst, dan boeking; containernummer wordt niet door elke rederij ondersteund."""
         if shipment.bl_number:
-            request_type, number = "bill_of_lading", shipment.bl_number
-        else:
-            request_type, number = "container", shipment.container_number
+            return "bill_of_lading", shipment.bl_number
+        if shipment.booking_number:
+            return "booking_number", shipment.booking_number
+        return "container", shipment.container_number
+
+    def _create_request(self, shipment):
+        request_type, number = self._request_number(shipment)
+        scac = self._scac(shipment)
         body = {"data": {"type": "tracking_request", "attributes": {
-            "request_type": request_type, "request_number": number, "scac": self._scac(shipment),
+            "request_type": request_type, "request_number": number, "scac": scac,
         }}}
-        data = self._call("POST", "/tracking_requests", json=body)["data"]
+        try:
+            data = self._call("POST", "/tracking_requests", json=body)["data"]
+        except DuplicateRequest:
+            data = self._find_existing(number, scac)
         shipment.external_tracking_id = f"tr:{data['id']}"
         shipment.save(update_fields=["external_tracking_id"])
         return data
+
+    def _find_existing(self, number, scac):
+        """Zoek de bestaande tracking request op, zodat het portaal die gewoon gaat volgen."""
+        found = self._call("GET", "/tracking_requests", params={"q": number}).get("data", [])
+        for item in found:
+            attrs = item.get("attributes", {})
+            if attrs.get("request_number", "").upper() == number.upper() and (attrs.get("scac") or "").upper() == scac:
+                return item
+        raise TrackingError(f"Terminal49 meldt dat {number} al gevolgd wordt, maar de aanvraag is niet terug te vinden.")
 
     def _shipment_id(self, shipment):
         ref = shipment.external_tracking_id or ""
@@ -118,10 +144,14 @@ def parse_shipment(payload, container_number=""):
         arrival=ata or eta,
         arrival_classifier="ACT" if ata else "EST",
     )
+    lfd = _dt(container.get("pickup_lfd"))
     return TrackingResult(
         provider="terminal49",
         eta=ata or eta,
         ata=ata,
+        eta_original=_dt(attrs.get("pod_original_eta_at")),
+        discharged_at=_dt(container.get("pod_discharged_at")),
+        last_free_day=dj_timezone.localtime(lfd).date() if lfd else None,
         vessel_name=leg.vessel_name,
         vessel_imo=leg.vessel_imo,
         voyage=leg.voyage,

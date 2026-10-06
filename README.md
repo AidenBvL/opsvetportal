@@ -72,6 +72,26 @@ De `scheduler`-service ververst elke 30 minuten de ETA's en verstuurt om `DAILY_
 dagoverzicht en de dienstherinneringen. Zonder Docker gebruik je cron voor `refresh_tracking` en
 `send_daily_mails`. Stel voor de e-mails de SMTP-gegevens en `PORTAL_BASE_URL` in (zie `.env.example`).
 
+## Online zetten met Render (automatisch bijgewerkt vanuit GitHub)
+
+1. Maak een account op render.com en koppel je GitHub-account.
+2. Kies **New → Blueprint** en selecteer deze repository. Render leest `render.yaml` en maakt
+   de webserver en de PostgreSQL-database aan.
+3. Kies de branch waarvan Render moet bouwen. Elke push naar die branch wordt daarna automatisch
+   gebouwd en live gezet (`autoDeploy: true`).
+4. Vul in het Render-dashboard de geheime instellingen in: `TERMINAL49_API_KEY`,
+   `DJANGO_ADMIN_USERNAME`, `DJANGO_ADMIN_EMAIL`, `DJANGO_ADMIN_PASSWORD` en (voor e-mail) de
+   `EMAIL_*`-instellingen. Bij de eerste start worden de tabellen, de rollen, het team en de
+   beheerder automatisch aangemaakt.
+5. Laat een gratis cronservice (bijv. cron-job.org) elke 10 minuten
+   `https://<jouw-app>.onrender.com/cron/<CRON_TOKEN>/` aanroepen. Het `CRON_TOKEN` staat bij de
+   instellingen van de webservice. Dit ververst de ETA's, verstuurt de dagelijkse mails en houdt de
+   gratis server wakker.
+
+Let op bij het gratis plan: de server slaapt na 15 minuten zonder verkeer, de gratis database
+verloopt na 30 dagen en geüploade documenten verdwijnen bij een herstart. Voor echt gebruik:
+het betaalde plan (vanaf ongeveer $7 per maand plus database) of een server via IT.
+
 ## ETA en zeeschip via API (gratis)
 
 De gratis route loopt rechtstreeks via de API's van de rederijen. Bijna alle grote rederijen

@@ -273,3 +273,58 @@ class CronEndpointTests(TestCase):
     @override_settings(CRON_TOKEN="")
     def test_disabled_without_token(self):
         self.assertEqual(self.client.get("/cron/x/").status_code, 404)
+
+
+@override_settings(TERMINAL49_API_KEY="test-key")
+class Terminal49ImprovementTests(TestCase):
+    def setUp(self):
+        customer = Customer.objects.create(name="K")
+        line = ShippingLine.objects.create(name="Maersk", scac="MAEU", tracking_provider="terminal49")
+        self.shipment = SeaShipment.objects.create(customer=customer, shipping_line=line, container_number="CSQU3054383",
+                                                   eta=timezone.now() + timedelta(days=3))
+
+    response = staticmethod(Terminal49Tests.response)
+
+    def test_booking_number_preferred_over_container(self):
+        self.shipment.booking_number = "254123987"
+        self.shipment.save()
+        pending = self.response({"data": {"id": "tr1", "attributes": {"status": "pending"}, "relationships": {}}}, 201)
+        with mock.patch("shipments.tracking.terminal49.requests.request", return_value=pending) as req:
+            refresh_shipment(self.shipment)
+        attrs = req.call_args.kwargs["json"]["data"]["attributes"]
+        self.assertEqual((attrs["request_type"], attrs["request_number"]), ("booking_number", "254123987"))
+
+    def test_duplicate_reuses_existing_request(self):
+        duplicate = self.response({"errors": [{"status": "422", "code": "duplicate", "detail": "already exists"}]}, 422)
+        listing = self.response({"data": [
+            {"id": "other", "attributes": {"request_number": "XXXX", "scac": "MAEU", "status": "created"}},
+            {"id": "tr7", "attributes": {"request_number": "CSQU3054383", "scac": "MAEU", "status": "created"},
+             "relationships": {"tracked_object": {"data": {"id": "shp7", "type": "shipment"}}}},
+        ]})
+        shipment_payload = self.response({"data": {"id": "shp7", "attributes": {"pod_eta_at": "2026-10-20T06:00:00Z"}}, "included": []})
+        with mock.patch("shipments.tracking.terminal49.requests.request", side_effect=[duplicate, listing, shipment_payload]) as req:
+            update = refresh_shipment(self.shipment)
+        self.assertTrue(update.success, update.message)
+        self.assertEqual(req.call_args_list[1].kwargs["params"], {"q": "CSQU3054383"})
+        self.shipment.refresh_from_db()
+        self.assertEqual(self.shipment.external_tracking_id, "shp:shp7")
+
+    def test_original_eta_discharge_and_last_free_day(self):
+        self.shipment.external_tracking_id = "shp:shp9"
+        self.shipment.free_time_until = None
+        self.shipment.save()
+        payload = self.response({
+            "data": {"id": "shp9", "attributes": {"pod_eta_at": "2026-10-20T06:00:00Z", "pod_original_eta_at": "2026-10-18T06:00:00Z",
+                                                   "pod_ata_at": "2026-10-20T07:00:00Z", "pod_vessel_name": "EVER ACE"}},
+            "included": [{"type": "container", "attributes": {"number": "CSQU3054383", "pod_discharged_at": "2026-10-21T03:00:00Z",
+                                                              "pickup_lfd": "2026-10-23T22:00:00Z"}}],
+        })
+        with mock.patch("shipments.tracking.terminal49.requests.request", return_value=payload):
+            refresh_shipment(self.shipment)
+        self.shipment.refresh_from_db()
+        self.assertEqual(self.shipment.eta_original.isoformat(), "2026-10-18T06:00:00+00:00")
+        self.assertEqual(self.shipment.eta_delay_hours, 49)
+        self.assertIsNotNone(self.shipment.discharged_at)
+        # 22:00 UTC is middernacht 24 oktober in Nederland (zomertijd).
+        self.assertEqual(str(self.shipment.free_time_until), "2026-10-24")
+        self.assertEqual(self.shipment.status, "aangekomen")

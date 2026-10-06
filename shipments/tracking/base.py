@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 
 
 class TrackingError(Exception):
@@ -26,6 +26,10 @@ class TrackingResult:
     voyage: str = ""
     legs: list[Leg] = field(default_factory=list)
     raw: object = None
+    # Optioneel, alleen als de bron het levert:
+    eta_original: datetime | None = None  # eerste ETA volgens de rederij
+    discharged_at: datetime | None = None
+    last_free_day: date | None = None  # laatste vrije dag (demurrage)
 
     @property
     def vessels(self):

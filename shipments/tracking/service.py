@@ -73,6 +73,16 @@ def refresh_shipment(shipment: SeaShipment) -> TrackingUpdate | None:
         if shipment.status == "verwacht":
             shipment.status = "aangekomen"
 
+    if result.eta_original:
+        # De eerste ETA van de rederij is leidend voor de berekende vertraging.
+        shipment.eta_original = result.eta_original
+    if result.discharged_at and not shipment.discharged_at:
+        shipment.discharged_at = result.discharged_at
+    if result.last_free_day and result.last_free_day != shipment.free_time_until:
+        if shipment.free_time_until:
+            messages.append(f"Vrije dagen gewijzigd: t/m {result.last_free_day:%d-%m}")
+        shipment.free_time_until = result.last_free_day
+
     if len(result.vessels) > 1:
         messages.append("Overslag via: " + " → ".join(result.vessels))
 
