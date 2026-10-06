@@ -86,7 +86,8 @@ class PortTests(TestCase):
         self.assertEqual(port_code("Manzanillo"), "Manzanillo")  # twee havens met die naam: niet raden
         self.assertEqual(port_code("MANZANILLO (MX)"), "MXZLO")
         self.assertEqual(port_code("Onbekende Haven"), "Onbekende Haven")
-        self.assertEqual(port_label("BRPNG"), "Paranaguá (BRPNG)")
+        self.assertEqual(port_label("BRPNG"), "Paranaguá, Brazilië (BRPNG)")
+        self.assertEqual(port_label("SGSIN"), "Singapore (SGSIN)")
         self.assertEqual(port_label("Onbekende Haven"), "Onbekende Haven")
 
     def test_new_port_recodes_open_shipments(self):
@@ -99,3 +100,26 @@ class PortTests(TestCase):
         Port.objects.create(locode="XXPNV", name="Puerto Nuevo")
         shipment.refresh_from_db()
         self.assertEqual(shipment.port_of_loading, "XXPNV")
+
+
+class TerminalTests(TestCase):
+    def test_terminal_variants_become_full_name(self):
+        from core.models import Port, Terminal
+        from core.ports import terminal_name
+        from shipments.models import SeaShipment
+
+        self.assertEqual(terminal_name("ECT EUROMAX ROTTERDAM"), "ECT Euromax Terminal")
+        self.assertEqual(terminal_name("hutchison port delta ii"), "Hutchison Ports Delta II")
+        self.assertEqual(terminal_name("Onbekende kade"), "Onbekende kade")
+        customer = Customer.objects.create(name="K")
+        shipment = SeaShipment.objects.create(customer=customer, container_number="CSQU3054383", terminal="KLOOSTERBOER VLISSINGEN")
+        Terminal.objects.create(name="Kloosterboer Vlissingen", port=Port.objects.get(locode="NLVLI"), aliases="KLOOSTERBOER VLISSINGEN")
+        shipment.refresh_from_db()
+        self.assertEqual(shipment.terminal, "Kloosterboer Vlissingen")
+
+    def test_port_input_shows_full_name(self):
+        from shipments.forms import SeaShipmentForm
+
+        html = str(SeaShipmentForm(initial={"port_of_loading": "BRPNG"})["port_of_loading"])
+        self.assertIn("Paranaguá, Brazilië", html)
+        self.assertIn('<option value="NLRTM">Rotterdam, Nederland</option>', html)

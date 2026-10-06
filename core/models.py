@@ -244,6 +244,40 @@ class Port(TimeStampedModel):
         return result
 
 
+class Terminal(TimeStampedModel):
+    """Containerterminal. Varianten uit tracking ("ECT EUROMAX ROTTERDAM") worden de volledige naam."""
+
+    name = models.CharField("volledige naam", max_length=150, unique=True)
+    port = models.ForeignKey(Port, verbose_name="haven", null=True, blank=True, on_delete=models.SET_NULL, related_name="terminals")
+    aliases = models.CharField(
+        "andere schrijfwijzen", max_length=400, blank=True,
+        help_text="Komma-gescheiden, zoals rederijen en trackingdiensten de terminal noemen, bijv. ECT EUROMAX ROTTERDAM, EUROMAX.",
+    )
+    active = models.BooleanField("actief", default=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "terminal"
+        verbose_name_plural = "terminals"
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        from .ports import clear_cache, recode_shipments
+
+        super().save(*args, **kwargs)
+        clear_cache()
+        recode_shipments()
+
+    def delete(self, *args, **kwargs):
+        from .ports import clear_cache
+
+        result = super().delete(*args, **kwargs)
+        clear_cache()
+        return result
+
+
 class JobRun(models.Model):
     """Laatste uitvoering van geplande taken (voorkomt dubbele dagoverzichten na een herstart)."""
 

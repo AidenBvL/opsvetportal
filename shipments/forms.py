@@ -9,16 +9,35 @@ DT_FORMAT = "%Y-%m-%dT%H:%M"
 
 
 class PortInput(forms.TextInput):
-    """Tekstveld met suggesties uit Stamgegevens > Havens (je kunt de code of de naam typen)."""
+    """Tekstveld voor een haven: code of naam typen, met suggesties en de volledige naam eronder."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        from django.utils.html import format_html, format_html_join
+
+        from core.ports import port_full_name, port_index
+
+        list_id = f"ports-{name}"
+        attrs = {**(attrs or {}), "list": list_id, "autocomplete": "off", "data-port-input": ""}
+        codes = sorted(port_index()["codes"])
+        options = format_html_join("", '<option value="{}">{}</option>', ((code, port_full_name(code)) for code in codes))
+        return super().render(name, value, attrs, renderer) + format_html(
+            '<datalist id="{}">{}</datalist><div class="form-text port-name" data-port-name>{}</div>',
+            list_id, options, port_full_name(value) if value else "",
+        )
+
+
+class TerminalInput(forms.TextInput):
+    """Tekstveld met de terminals uit Stamgegevens > Terminals als suggestie."""
 
     def render(self, name, value, attrs=None, renderer=None):
         from django.utils.html import format_html, format_html_join
 
         from core.ports import port_index
 
-        list_id = f"ports-{name}"
+        list_id = f"terminals-{name}"
+        names = sorted(set(port_index()["terminals"].values()))
+        options = format_html_join("", '<option value="{}"></option>', ((n,) for n in names))
         attrs = {**(attrs or {}), "list": list_id, "autocomplete": "off"}
-        options = format_html_join("", '<option value="{}">{}</option>', sorted(port_index()["codes"].items()))
         return super().render(name, value, attrs, renderer) + format_html('<datalist id="{}">{}</datalist>', list_id, options)
 
 
@@ -42,6 +61,7 @@ class SeaShipmentForm(forms.ModelForm):
             "notes": forms.Textarea(attrs={"rows": 3}),
             "port_of_loading": PortInput(),
             "port_of_discharge": PortInput(),
+            "terminal": TerminalInput(),
         }
         help_texts = {"vessel_name": "Wordt automatisch bijgewerkt via tracking.", "eta": "Wordt automatisch bijgewerkt via tracking."}
 

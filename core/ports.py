@@ -74,6 +74,41 @@ COUNTRIES = {
     "THAILAND": "TH", "INDONESIA": "ID", "MALAYSIA": "MY", "NEW ZEALAND": "NZ", "AUSTRALIA": "AU", "MOROCCO": "MA",
 }  # fmt: skip
 
+# (volledige naam, UN/LOCODE haven, andere schrijfwijzen) — beginvulling van Stamgegevens > Terminals.
+DEFAULT_TERMINALS = [
+    ("ECT Delta Terminal", "NLRTM", "ECT DELTA, HUTCHISON PORTS ECT DELTA, ECT DELTA ROTTERDAM, DELTA TERMINAL"),
+    ("ECT Euromax Terminal", "NLRTM", "ECT EUROMAX, ECT EUROMAX ROTTERDAM, EUROMAX, EUROMAX TERMINAL ROTTERDAM"),
+    ("Hutchison Ports Delta II", "NLRTM", "HUTCHISON PORT DELTA II, HUTCHISON PORTS DELTA 2, DELTA II"),
+    ("APM Terminals Maasvlakte II", "NLRTM", "APMT MVII, APMT MAASVLAKTE II, APM TERMINALS MVII, APM TERMINALS MAASVLAKTE 2"),
+    ("APM Terminals Rotterdam", "NLRTM", "APMT ROTTERDAM, APM TERMINALS MAASVLAKTE"),
+    ("Rotterdam World Gateway", "NLRTM", "RWG, ROTTERDAM WORLD GATEWAY TERMINAL"),
+    ("MPET (MSC PSA European Terminal)", "BEANR", "MPET, MSC PSA EUROPEAN TERMINAL, PSA MPET"),
+    ("PSA Noordzee Terminal", "BEANR", "NOORDZEE TERMINAL, PSA NOORDZEE"),
+    ("PSA Europa Terminal", "BEANR", "EUROPA TERMINAL, PSA EUROPA"),
+    ("DP World Antwerp Gateway", "BEANR", "ANTWERP GATEWAY, DP WORLD ANTWERP"),
+    ("HHLA Container Terminal Burchardkai", "DEHAM", "CTB, BURCHARDKAI, HHLA CTB"),
+    ("HHLA Container Terminal Altenwerder", "DEHAM", "CTA, ALTENWERDER, HHLA CTA"),
+    ("Eurogate Container Terminal Hamburg", "DEHAM", "EUROGATE HAMBURG, CTH"),
+    ("North Sea Terminal Bremerhaven", "DEBRV", "NTB, NORTH SEA TERMINAL"),
+    ("Eurogate Container Terminal Bremerhaven", "DEBRV", "EUROGATE BREMERHAVEN, CTB BREMERHAVEN"),
+]  # fmt: skip
+
+# Landcode (eerste 2 letters van de UN/LOCODE) -> landnaam, voor "Paranaguá, Brazilië (BRPNG)".
+COUNTRY_NAMES = {
+    "NL": "Nederland", "BE": "België", "DE": "Duitsland", "FR": "Frankrijk", "GB": "Verenigd Koninkrijk", "IE": "Ierland",
+    "ES": "Spanje", "PT": "Portugal", "IT": "Italië", "GR": "Griekenland", "TR": "Turkije", "MA": "Marokko", "EG": "Egypte",
+    "PL": "Polen", "SE": "Zweden", "DK": "Denemarken", "NO": "Noorwegen", "IS": "IJsland", "FO": "Faeröer", "BR": "Brazilië",
+    "AR": "Argentinië", "UY": "Uruguay", "CL": "Chili", "PE": "Peru", "EC": "Ecuador", "CO": "Colombia", "CR": "Costa Rica",
+    "PA": "Panama", "GT": "Guatemala", "HN": "Honduras", "MX": "Mexico", "DO": "Dominicaanse Republiek",
+    "US": "Verenigde Staten", "CA": "Canada", "ZA": "Zuid-Afrika", "NA": "Namibië", "KE": "Kenia", "TZ": "Tanzania",
+    "MU": "Mauritius", "CI": "Ivoorkust", "GH": "Ghana", "SN": "Senegal", "NG": "Nigeria", "MR": "Mauritanië",
+    "IN": "India", "BD": "Bangladesh", "LK": "Sri Lanka", "PK": "Pakistan", "AE": "Verenigde Arabische Emiraten",
+    "SA": "Saoedi-Arabië", "OM": "Oman", "SG": "Singapore", "MY": "Maleisië", "ID": "Indonesië", "TH": "Thailand",
+    "VN": "Vietnam", "PH": "Filipijnen", "CN": "China", "HK": "Hongkong", "TW": "Taiwan", "KR": "Zuid-Korea", "JP": "Japan",
+    "AU": "Australië", "NZ": "Nieuw-Zeeland", "RU": "Rusland", "FI": "Finland", "EE": "Estland", "LT": "Litouwen",
+    "LV": "Letland", "IL": "Israël", "TN": "Tunesië", "DZ": "Algerije", "SR": "Suriname", "VE": "Venezuela",
+}  # fmt: skip
+
 LOCODE_RE = re.compile(r"[A-Z]{2}[A-Z0-9]{3}")
 _cache = {"at": 0.0, "index": None}
 CACHE_SECONDS = 300
@@ -94,9 +129,20 @@ def port_index():
     """{"names": {naam: [codes]}, "codes": {code: naam}} uit Stamgegevens > Havens (kort in het geheugen)."""
     if _cache["index"] is not None and time.monotonic() - _cache["at"] < CACHE_SECONDS:
         return _cache["index"]
-    from .models import Port
+    from .models import Port, Terminal
 
-    names, codes = {}, {}
+    from django.db import DatabaseError, transaction
+
+    names, codes, terminals = {}, {}, {}
+    try:
+        with transaction.atomic():  # tijdens oudere migraties bestaat de terminaltabel nog niet
+            rows = list(Terminal.objects.filter(active=True).values_list("name", "aliases"))
+    except DatabaseError:
+        rows = []
+    for name, aliases in rows:
+        for alias in [name, *aliases.split(",")]:
+            if _key(alias):
+                terminals[_key(alias)] = name
     for locode, name, aliases in Port.objects.filter(active=True).values_list("locode", "name", "aliases"):
         codes[locode] = name
         for alias in [name, *aliases.split(",")]:
@@ -104,7 +150,7 @@ def port_index():
                 names.setdefault(_key(alias), [])
                 if locode not in names[_key(alias)]:
                     names[_key(alias)].append(locode)
-    _cache.update(at=time.monotonic(), index={"names": names, "codes": codes})
+    _cache.update(at=time.monotonic(), index={"names": names, "codes": codes, "terminals": terminals})
     return _cache["index"]
 
 
@@ -145,16 +191,37 @@ def port_code(value):
     return raw
 
 
+def terminal_name(value):
+    """"ECT EUROMAX ROTTERDAM" -> "ECT Euromax Terminal" als de terminal bekend is, anders ongewijzigd."""
+    raw = (value or "").strip()
+    return port_index()["terminals"].get(_key(raw), raw) if raw else ""
+
+
+def port_full_name(code):
+    """"BRPNG" -> "Paranaguá, Brazilië"; leeg als de code onbekend is."""
+    code = (code or "").strip().upper()
+    name = port_index()["codes"].get(code)
+    if not name:
+        return ""
+    country = COUNTRY_NAMES.get(code[:2], code[:2])
+    return name if _key(name) == _key(country) else f"{name}, {country}"
+
+
 def port_label(value):
-    """Voor op het scherm: "Paranaguá (BRPNG)"; onbekend blijft zoals het is."""
+    """Voor op het scherm: "Paranaguá, Brazilië (BRPNG)"; onbekend blijft zoals het is."""
     value = (value or "").strip()
-    name = port_index()["codes"].get(value.upper())
-    return f"{name} ({value.upper()})" if name else value
+    full = port_full_name(value)
+    return f"{full} ({value.upper()})" if full else value
 
 
 def recode_shipments():
     """Open dossiers met een havennaam i.p.v. code alsnog omzetten (bijv. nadat een haven is toegevoegd)."""
     from shipments.models import SeaShipment
+
+    for pk, value in SeaShipment.objects.filter(status__in=SeaShipment.OPEN_STATUSES).exclude(terminal="").values_list("pk", "terminal"):
+        name = terminal_name(value)
+        if name != value:
+            SeaShipment.objects.filter(pk=pk).update(terminal=name)
 
     for field in ("port_of_loading", "port_of_discharge"):
         rows = (SeaShipment.objects.filter(status__in=SeaShipment.OPEN_STATUSES).exclude(**{f"{field}__regex": r"^[A-Z]{2}[A-Z0-9]{3}$"})

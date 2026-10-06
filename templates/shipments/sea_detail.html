@@ -41,11 +41,11 @@
   <div class="row g-3 align-items-center">
     <div class="col-lg-8">
       <div class="voyage">
-        <div class="voyage-port" title="{{ object.port_of_loading|port }}">{{ object.port_of_loading|port_name|default:"Laadhaven ?" }} <span class="small text-body-secondary font-monospace">{{ object.port_of_loading }}</span><small>{% if object.departed_at %}vertrokken {{ object.departed_at|date:"j M" }}{% else %}vertrek onbekend{% endif %}</small></div>
+        <div class="voyage-port" title="{{ object.port_of_loading|port }}">{{ object.port_of_loading|port_full|default:"Laadhaven ?" }} <span class="small text-body-secondary font-monospace">{{ object.port_of_loading }}</span><small>{% if object.departed_at %}vertrokken {{ object.departed_at|date:"j M" }}{% else %}vertrek onbekend{% endif %}</small></div>
         <div class="voyage-track" title="{% if object.voyage_progress is not None %}{{ object.voyage_progress }}% van de reis{% endif %}">
           {% if object.voyage_progress is not None %}<span style="width: {{ object.voyage_progress }}%"></span><div class="voyage-ship" style="left: {{ object.voyage_progress }}%"><i class="bi bi-water"></i></div>{% endif %}
         </div>
-        <div class="voyage-port text-end" title="{{ object.port_of_discharge|port }}">{{ object.port_of_discharge|port_name }} <span class="small text-body-secondary font-monospace">{{ object.port_of_discharge }}</span><small>{{ object.terminal|default:"terminal onbekend" }}</small></div>
+        <div class="voyage-port text-end" title="{{ object.port_of_discharge|port }}">{{ object.port_of_discharge|port_full }} <span class="small text-body-secondary font-monospace">{{ object.port_of_discharge }}</span><small>{{ object.terminal|default:"terminal onbekend" }}</small></div>
       </div>
       <div class="small text-body-secondary mt-2">
         <i class="bi bi-life-preserver"></i> {{ object.shipping_line|default:"rederij onbekend" }} ·
@@ -99,7 +99,8 @@
           <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Reis</h6><dl class="kv">
             <dt>Rederij</dt><dd>{{ object.shipping_line|default:"–" }}</dd>
             <dt>Laadhaven</dt><dd>{{ object.port_of_loading|port|default:"–" }}</dd>
-            <dt>Loshaven</dt><dd>{{ object.port_of_discharge|port }}{% if object.terminal %} · {{ object.terminal }}{% endif %}</dd>
+            <dt>Loshaven</dt><dd>{{ object.port_of_discharge|port }}</dd>
+            <dt>Terminal</dt><dd>{{ object.terminal|default:"–" }}</dd>
             <dt>Vertrokken</dt><dd>{{ object.departed_at|date:"D j M Y H:i"|default:"–" }}</dd>
             <dt>Oorspr. ETA</dt><dd>{{ object.eta_original|date:"D j M Y H:i"|default:"–" }}</dd>
             <dt>Gelost</dt><dd>{{ object.discharged_at|date:"D j M Y H:i"|default:"–" }}</dd>
