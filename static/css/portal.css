@@ -321,3 +321,14 @@ th[data-sort].desc::after { content: "\2193"; opacity: .9; }
 .action-card.prio-3 { border-left-color: var(--bs-warning); }
 .action-card.prio-4, .action-card.overdue { border-left-color: var(--bs-danger); }
 .action-card .btn { --bs-btn-padding-y: .1rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .76rem; }
+
+/* Uploadvak voor documenten bij een dossier */
+.dropzone { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 18px; border: 1.5px dashed var(--app-border); border-radius: 10px; color: var(--bs-secondary-color); text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+.dropzone:hover, .dropzone.is-over { border-color: var(--brand, var(--bs-primary)); background: var(--brand-soft, transparent); color: var(--app-ink); }
+.dropzone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.dropzone.is-busy { pointer-events: none; opacity: .6; }
+.dropzone .bi { font-size: 1.4rem; }
+.doc-row { display: flex; align-items: center; gap: 10px; }
+.doc-row .doc-icon { font-size: 1.3rem; color: var(--bs-secondary-color); }
+.doc-row .doc-name { min-width: 0; flex: 1 1 auto; }
+.doc-row .doc-name a { word-break: break-all; }

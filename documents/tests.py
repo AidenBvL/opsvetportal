@@ -9,8 +9,9 @@ from django.test import TestCase, override_settings
 from core.models import Customer, InspectionPoint, ShippingLine
 from shipments.models import SeaShipment
 
+from .layout import extract_layout_fields
 from .models import Document
-from .parser import ExtractionError, extract_fields, extract_text, find_containers, parse_date
+from .parser import ExtractionError, extract_fields, extract_text, find_containers, match_master_data, merge_layout, parse_date
 
 SAMPLE_BL = """
 MAERSK                                   BILL OF LADING
@@ -127,3 +128,143 @@ class UploadFlowTests(TestCase):
         r = self.client.post("/documenten/uploaden/", {"file": upload, "doc_type": "other"})
         self.assertEqual(r.status_code, 200)
         self.assertFalse(Document.objects.exists())
+
+
+def _words(*rows):
+    """Bouw pdfplumber-achtige woorden: rows = (top, [(x0, tekst), ...])."""
+    words = []
+    for top, items in rows:
+        for x0, text in items:
+            words.append({"text": text, "x0": x0, "x1": x0 + 5.2 * len(text), "top": top, "bottom": top + 7})
+    return words
+
+
+# Uitsnede van een CMA CGM sea waybill: labels boven, waarden eronder (en soms iets naar links).
+WAYBILL_WORDS = _words(
+    (12, [(511, "VOYAGE"), (543, "NUMBER")]),
+    (15, [(5, "SHIPPER")]),
+    (25, [(3, "VIBRA"), (29, "AGROINDUSTRIAL"), (102, "S/A"), (510, "0EWOAN1MA")]),
+    (42, [(504, "WAYBILL"), (536, "NUMBER")]),
+    (52, [(331, "NON"), (365, "NEGOTIABLE")]),
+    (57, [(518, "SSZ1840212")]),
+    (85, [(6, "CONSIGNEE"), (288, "EXPORT"), (319, "REFERENCES")]),
+    (97, [(3, "J.A."), (18, "TER"), (37, "MATEN")]),
+    (106, [(3, "DE"), (16, "KOOIHOEK"), (61, "7")]),
+    (259, [(55, "VESSEL"), (179, "PORT"), (200, "OF"), (212, "LOADING"), (325, "PORT"), (346, "OF"), (358, "DISCHARGE"),
+           (466, "FINAL"), (488, "PLACE"), (513, "OF"), (524, "DELIVERY*")]),
+    (268, [(2, "MAERSK"), (39, "LONDRINA"), (133, "PARANAGUA"), (283, "ROTTERDAM")]),
+    (600, [(3, "carry"), (30, "on"), (45, "any"), (65, "Vessel")]),
+    (609, [(3, "something"), (60, "else")]),
+)
+
+WAYBILL_TEXT = """VOYAGE NUMBER
+SHIPPER
+CONSIGNEE EXPORT REFERENCES
+J.A. TER MATEN
+VESSEL PORT OF LOADING PORT OF DISCHARGE FINAL PLACE OF DELIVERY*
+MAERSK LONDRINA PARANAGUA ROTTERDAM
+SEGU9074220 1 x 40RH 21 CARTONS 22909.950 4650 25.200
+SEAL K1108089
+Vibra Ingredients NCM: 0511.99.99 - 22050 (KG) -
+FROZEN CHICKEN GIBLETS - LIVER -
+Cargo is stowed in a refrigerated container set
+at the shipper's requested carrying temperature
+of -22 degrees Celsius
+Shipped on Board MAERSK LONDRINA 11-SEP-2026 CMA CGM do Brasil
+SIGNED FOR THE CARRIER CMA CGM S.A.
+"""
+
+
+class LayoutTests(TestCase):
+    def test_values_below_labels(self):
+        fields = extract_layout_fields([WAYBILL_WORDS])
+        self.assertEqual(fields["voyage"], "0EWOAN1MA")
+        self.assertEqual(fields["bl_number"], "SSZ1840212")
+        self.assertEqual(fields["vessel_name"], "MAERSK LONDRINA")
+        self.assertEqual(fields["port_of_loading"], "PARANAGUA")
+        self.assertEqual(fields["port_of_discharge"], "ROTTERDAM")
+        self.assertEqual(fields["consignee"].splitlines()[0], "J.A. TER MATEN")
+        self.assertTrue(fields["shipper"].startswith("VIBRA AGROINDUSTRIAL"))
+
+    def test_waybill_text_fields(self):
+        data = merge_layout(extract_fields(WAYBILL_TEXT), extract_layout_fields([WAYBILL_WORDS]))
+        self.assertEqual(data["temperature_setpoint"], "-22")
+        self.assertEqual(data["goods_description"], "FROZEN CHICKEN GIBLETS - LIVER")
+        self.assertEqual(data["departed_at"], "2026-09-11")
+        self.assertEqual(data["port_of_discharge"], "NLRTM")
+        self.assertEqual(data["containers"][0]["seal_number"], "K1108089")
+
+    def test_customer_and_carrier_matching(self):
+        maersk = ShippingLine.objects.create(name="Maersk", scac="MAEU")
+        cma = ShippingLine.objects.create(name="CMA CGM", scac="CMDU")
+        customer = Customer.objects.create(name="J.A. Ter Maten")
+        Customer.objects.create(name="Eurofoodlink B.V.")
+        data = match_master_data(WAYBILL_TEXT, merge_layout(extract_fields(WAYBILL_TEXT), extract_layout_fields([WAYBILL_WORDS])))
+        self.assertEqual(data["customer_id"], customer.pk)
+        # "MAERSK" staat alleen in de scheepsnaam; de vervoerder is CMA CGM.
+        self.assertEqual(data["shipping_line_id"], cma.pk)
+        self.assertNotEqual(data["shipping_line_id"], maersk.pk)
+
+
+class ShipmentDocumentTests(TestCase):
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media)
+        self.override.enable()
+        self.user = User.objects.create_superuser("admin", "a@example.com", "pw")
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(name="Voorbeeld Seafood Import BV")
+        self.shipment = SeaShipment.objects.create(customer=self.customer, container_number="CSQU3054383")
+
+    def tearDown(self):
+        self.override.disable()
+        shutil.rmtree(self.media, ignore_errors=True)
+
+    def upload(self, *files, doc_type="other"):
+        return self.client.post(f"/documenten/zending/zee/{self.shipment.pk}/uploaden/", {"files": list(files), "doc_type": doc_type})
+
+    def test_upload_link_open_and_unlink(self):
+        r = self.upload(SimpleUploadedFile("factuur.pdf", b"%PDF-1.4 kapot", content_type="application/pdf"),
+                        SimpleUploadedFile("instructies.docx", b"PK..", content_type="application/octet-stream"))
+        self.assertRedirects(r, f"/zendingen/zeevracht/{self.shipment.pk}/#tab-docs", fetch_redirect_response=False)
+        self.assertEqual(self.shipment.documents.count(), 2)
+        pdf = Document.objects.get(original_name="factuur.pdf")
+        self.assertEqual(pdf.customer, self.customer)
+        self.assertEqual(bytes(pdf.content), b"%PDF-1.4 kapot")
+
+        page = self.client.get(f"/zendingen/zeevracht/{self.shipment.pk}/")
+        self.assertContains(page, "factuur.pdf")
+        self.assertContains(page, f"/documenten/{pdf.pk}/bestand/")
+
+        r = self.client.get(f"/documenten/{pdf.pk}/bestand/")
+        self.assertEqual(r["Content-Type"], "application/pdf")
+        self.assertTrue(r["Content-Disposition"].startswith("inline"))
+        self.assertEqual(r.content, b"%PDF-1.4 kapot")
+        docx = Document.objects.get(original_name="instructies.docx")
+        self.assertTrue(self.client.get(f"/documenten/{docx.pk}/bestand/")["Content-Disposition"].startswith("attachment"))
+        self.assertEqual(docx.status, "gekoppeld")
+
+        self.client.post(f"/documenten/{pdf.pk}/ontkoppelen/zee/{self.shipment.pk}/")
+        self.assertEqual(self.shipment.documents.count(), 1)
+        self.assertTrue(Document.objects.filter(pk=pdf.pk).exists())
+
+    def test_file_survives_missing_disk(self):
+        self.upload(SimpleUploadedFile("bl.txt", SAMPLE_BL.encode(), content_type="text/plain"), doc_type="bl")
+        document = Document.objects.get()
+        self.assertEqual(document.status, "gekoppeld")
+        self.assertIn("CSQU3054383", [c["container_number"] for c in document.extracted_data["containers"]])
+        import os
+
+        os.remove(document.file.path)  # bijv. na een nieuwe deploy op Render
+        self.assertEqual(self.client.get(f"/documenten/{document.pk}/bestand/").content, SAMPLE_BL.encode())
+        self.client.post(f"/documenten/{document.pk}/opnieuw/")
+        document.refresh_from_db()
+        self.assertEqual(document.status, "verwerkt")
+
+    def test_rejects_unknown_type_and_requires_login(self):
+        self.upload(SimpleUploadedFile("virus.exe", b"MZ"))
+        self.assertFalse(Document.objects.exists())
+        self.upload(SimpleUploadedFile("ok.txt", b"hallo"))
+        document = Document.objects.get()
+        self.client.logout()
+        self.assertNotEqual(self.client.get(f"/documenten/{document.pk}/bestand/").status_code, 200)

@@ -14,6 +14,7 @@ from django.conf import settings
 from shipments.validators import is_valid_container_number
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
+TEXT_EXTENSIONS = {".pdf", ".txt", ".csv", ".edi"} | IMAGE_EXTENSIONS
 MIN_TEXT_LENGTH = 40
 
 
@@ -83,6 +84,11 @@ MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "mrt": 3, "apr": 4, "may": 5, "mei": 5, "jun": 6, "jul": 7,
     "aug": 8, "sep": 9, "oct": 10, "okt": 10, "nov": 11, "dec": 12,
 }  # fmt: skip
+TEMPERATURE_PATTERN = (
+    r"(?:TEMP(?:ERATURE|ERATUUR)?|SET\s*POINT)[^\d\-+]{0,40}?([\-+]?\d{1,2}(?:[.,]\d)?)\s*"
+    r"(?:°\s*C\b|º\s*C\b|DEG(?:REES?|R)?\.?\s*(?:C(?:ELSIUS)?\b)?|C\b)"
+)
+GOODS_KEYWORDS = re.compile(r"\b(?:FROZEN|CHILLED|FRESH|DRIED|SALTED|SMOKED|DIEPGEVROREN|BEVROREN|GEKOELD|VERS)\b", re.I)
 
 
 def _first(pattern, text, flags=re.I | re.M, group=1):
@@ -146,45 +152,124 @@ def extract_fields(text):
     voyage = voyage or _first(r"\bVOY(?:AGE)?\.?\s*(?:NO\.?|NUMBER|NR\.?)?\s*[:\-]\s*([A-Z0-9]{3,12})\b", text)
 
     eta_raw = _first(r"\bETA\b[^\n\d]{0,20}([^\n]{6,30})", text)
-    temperature = _first(r"(?:TEMP(?:ERATURE|ERATUUR)?|SET\s*POINT)[^\n\d\-+]{0,25}([\-+]?\d{1,2}(?:[.,]\d)?)\s*°?\s*C\b", text)
+    flat = re.sub(r"\s+", " ", text)
+    temperature = _first(TEMPERATURE_PATTERN, flat)
     weight = _first(r"GROSS\s*WEIGHT[^\n\d]{0,25}([\d.,]+)\s*KGS?", text) or _first(r"BRUTO\s*GEWICHT[^\n\d]{0,25}([\d.,]+)", text)
 
     data = {
         "containers": find_containers(text),
-        "bl_number": _first(r"(?:B/?L|BILL\s+OF\s+LADING)\s*(?:NO\.?|NUMBER|NR\.?|#)?\s*[:\-]?\s*([A-Z]{2,4}[A-Z0-9]{6,16})\b", text),
+        "bl_number": _first(
+            r"(?:B/?L|BILL\s+OF\s+LADING|(?:SEA\s*)?WAYBILL)\s*(?:NO\.?|NUMBER|NR\.?|#)?\s*[:\-]?\s*((?=[A-Z0-9]*\d)[A-Z]{2,4}[A-Z0-9]{6,16})\b", text
+        ),
         "booking_number": _first(r"BOOKING\s*(?:NO\.?|NUMBER|NR\.?|REF\.?)?\s*[:\-]?\s*([A-Z0-9]{6,20})\b", text),
         "vessel_name": vessel.strip().upper()[:150],
         "voyage": voyage.upper(),
-        "port_of_loading": _first(r"PORT\s+OF\s+LOADING\s*[:\-]?\s*([^\n]{2,60})", text),
-        "port_of_discharge": _first(r"PORT\s+OF\s+DISCHARGE\s*[:\-]?\s*([^\n]{2,60})", text),
+        "port_of_loading": _not_a_label(_first(r"PORT\s+OF\s+LOADING\s*[:\-]?\s*([^\n]{2,60})", text)),
+        "port_of_discharge": _not_a_label(_first(r"PORT\s+OF\s+DISCHARGE\s*[:\-]?\s*([^\n]{2,60})", text)),
         "eta": (parse_date(eta_raw).isoformat() if parse_date(eta_raw) else ""),
         "ched_number": _first(r"\b(CHED[PDA]?(?:PP)?\.[A-Z]{2}\.\d{4}\.\d{5,8})\b", text),
         "customer_reference": _first(r"(?:YOUR|CUSTOMER|KLANT)\s*REF(?:ERENCE|ERENTIE)?\.?\s*[:\-]\s*([A-Z0-9\-/]{3,40})", text),
         "temperature_setpoint": temperature.replace(",", "."),
         "gross_weight_kg": weight,
-        "goods_description": _first(r"(?:DESCRIPTION\s+OF\s+GOODS|GOEDERENOMSCHRIJVING|COMMODITY)\s*[:\-]?\s*([^\n]{3,120})", text),
+        "goods_description": _first(r"(?:DESCRIPTION\s+OF\s+GOODS|GOEDERENOMSCHRIJVING|COMMODITY)\s*[:\-]?\s*([^\n]{3,120})", text)
+        or _goods_line(text),
+        "departed_at": "",
     }
+    shipped = _first(r"SHIPPED\s+ON\s+BOARD[^\n]{0,60}?(\d{1,2}[\s\-/.][A-Z0-9]{2,9}[\s\-/.,]+\d{4})", text)
+    if parse_date(shipped):
+        data["departed_at"] = parse_date(shipped).isoformat()
     return data
 
 
+def _not_a_label(value):
+    """Een kolomkop als "PORT OF DISCHARGE FINAL PLACE OF DELIVERY" is geen waarde."""
+    return "" if re.search(r"\b(?:PORT|PLACE)\s+OF\b|\bVESSEL\b|\bDELIVERY\b", value, re.I) else value
+
+
+# Veelvoorkomende loshavens als UN/LOCODE (zo verwacht de tracking ze).
+PORT_LOCODES = {
+    "ROTTERDAM": "NLRTM", "AMSTERDAM": "NLAMS", "VLISSINGEN": "NLVLI", "FLUSHING": "NLVLI", "MOERDIJK": "NLMOE",
+    "ANTWERP": "BEANR", "ANTWERPEN": "BEANR", "ANTWERPEN-BRUGGE": "BEANR", "ZEEBRUGGE": "BEZEE",
+    "HAMBURG": "DEHAM", "BREMERHAVEN": "DEBRV", "LE HAVRE": "FRLEH",
+}  # fmt: skip
+
+
+def port_locode(name):
+    clean = re.sub(r"[,(].*$", "", (name or "").upper()).strip()
+    if re.fullmatch(r"[A-Z]{2}\s?[A-Z0-9]{3}", clean):
+        return clean.replace(" ", "")
+    return PORT_LOCODES.get(clean, "")
+
+
+def merge_layout(data, layout):
+    """Waarden die via de opmaak (label boven waarde) zijn gevonden gaan voor op losse tekstpatronen."""
+    for field in ("bl_number", "booking_number", "vessel_name", "voyage", "port_of_loading", "port_of_discharge"):
+        value = (layout.get(field) or "").strip()
+        if field in {"bl_number", "booking_number", "voyage"}:
+            value = value.split()[0] if value else ""
+            if not re.fullmatch(r"(?=.*\d)[A-Z0-9\-/]{4,30}", value.upper()):
+                continue
+        if value:
+            data[field] = value.upper()[:150]
+    for field in ("consignee", "notify", "shipper"):
+        if layout.get(field):
+            data[field] = layout[field]
+    if data.get("port_of_discharge"):
+        data["port_of_discharge"] = port_locode(data["port_of_discharge"]) or data["port_of_discharge"]
+    return data
+
+
+def _goods_line(text):
+    """Zonder label: de eerste regel die naar een levensmiddel/lading klinkt (FROZEN ..., CHILLED ...)."""
+    for line in (text or "").splitlines():
+        if GOODS_KEYWORDS.search(line) and not re.search(r"\b(?:CONTAINER|STOWED|TEMPERATURE|REEFER)\b", line, re.I):
+            return re.sub(r"[\s\-:]+$", "", line.strip())[:250]
+    return ""
+
+
+def _normalize_name(value):
+    value = re.sub(r"[^A-Z0-9 ]", " ", (value or "").upper().replace(".", ""))
+    value = re.sub(r"\b(?:BV|B V|NV|VOF|GMBH|LTD|LIMITED|SA|S A|SL|SRL|SPA|INC|LLC|CO|HOLDING)\b", " ", value)
+    return " ".join(value.split())
+
+
+def match_customer(text, data):
+    """Zoek de klant: eerst in de consignee, dan in de notify party, dan in de hele tekst."""
+    from core.models import Customer
+
+    customers = [(c.id, _normalize_name(c.name)) for c in Customer.objects.filter(active=True)]
+    customers = [(cid, name) for cid, name in customers if len(name) >= 4]
+    for block in (data.get("consignee"), data.get("notify"), text):
+        haystack = f" {_normalize_name(block)} "
+        hits = [(cid, name) for cid, name in customers if f" {name} " in haystack]
+        if hits:
+            return max(hits, key=lambda item: len(item[1]))[0]
+    return None
+
+
 def match_master_data(text, data):
-    """Herken rederij en keurpunt aan de hand van namen/SCAC in de tekst."""
+    """Herken klant, rederij en keurpunt aan de hand van namen/SCAC in de tekst."""
     from core.models import InspectionPoint, ShippingLine
 
     upper = (text or "").upper()
-    line_id = None
-    for line in ShippingLine.objects.filter(active=True):
-        names = [line.name.upper()]
-        if line.scac:
-            names.append(line.scac.upper())
-        if any(re.search(rf"\b{re.escape(n)}\b", upper) for n in names):
-            line_id = line.id
-            break
+    # De scheepsnaam ("MAERSK LONDRINA") zegt niets over de rederij die de B/L uitgeeft.
+    if data.get("vessel_name"):
+        upper = upper.replace(data["vessel_name"].upper(), " ")
+    lines = list(ShippingLine.objects.filter(active=True))
+    line_id, best = None, 0
+    bl_prefix = (data.get("bl_number") or "")[:4].upper()
+    for line in lines:
+        names = [line.name.upper()] + ([line.scac.upper()] if line.scac else [])
+        score = sum(len(re.findall(rf"\b{re.escape(n)}\b", upper)) for n in names)
+        if line.scac and line.scac.upper() == bl_prefix:
+            score += 100
+        if score > best:
+            line_id, best = line.id, score
     if line_id is None:
         # Containerprefix (bijv. MSKU/MAEU) wijst vaak op de rederij.
         prefixes = {c["container_number"][:4] for c in data.get("containers", [])}
-        for line in ShippingLine.objects.filter(active=True).exclude(scac=""):
-            if line.scac.upper() in prefixes:
+        for line in lines:
+            if line.scac and line.scac.upper() in prefixes:
                 line_id = line.id
                 break
     point_id = None
@@ -194,19 +279,31 @@ def match_master_data(text, data):
             break
     data["shipping_line_id"] = line_id
     data["inspection_point_id"] = point_id
+    data["customer_id"] = match_customer(text, data)
     return data
 
 
 def process_document(document):
     """Lees een geüpload document uit en sla tekst en gevonden velden op."""
+    from .layout import pdf_layout_fields
+
+    layout = {}
     try:
-        text, method = extract_text(document.file.path)
-    except ExtractionError as exc:
+        with document.local_file() as path:
+            text, method = extract_text(path)
+            if method == "pdf-tekst":
+                try:
+                    layout = pdf_layout_fields(path)
+                except Exception:  # noqa: BLE001 - opmaakherkenning is een extraatje; tekstherkenning blijft staan
+                    layout = {}
+    except Exception as exc:  # noqa: BLE001 - ook een kapotte of beveiligde PDF: het document blijft bewaard
+        known = isinstance(exc, (ExtractionError, FileNotFoundError))
         document.status = "fout"
-        document.error = str(exc)[:300]
+        document.error = (str(exc) if known else f"Bestand kon niet worden gelezen ({exc.__class__.__name__}).")[:300]
         document.save(update_fields=["status", "error", "updated_at"])
         return document
-    data = match_master_data(text, extract_fields(text))
+    data = merge_layout(extract_fields(text), layout)
+    data = match_master_data(text, data)
     document.extracted_text = text
     document.extraction_method = method
     document.extracted_data = data

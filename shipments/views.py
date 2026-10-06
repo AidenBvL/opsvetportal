@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 
 from core.audit import history_for
 from core.crud import CrudCreateView, CrudListView, CrudUpdateView
+from documents.models import Document
 
 from .forms import BulkContainerForm, RoadTransportForm, SeaShipmentForm
 from .models import INSPECTION_STATUS_CHOICES, RoadTransport, SeaShipment
@@ -99,7 +100,8 @@ class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
             "actions": s.actions.all(),
             "costs": s.extra_costs.all(),
             "road": s.road_transports.select_related("carrier"),
-            "documents": s.documents.all(),
+            "documents": s.documents.select_related("uploaded_by").defer("content", "extracted_text"),
+            "doc_types": Document.TYPE_CHOICES,
             "meeting_items": s.meeting_items.select_related("meeting")[:10],
             "history": history_for(s),
             "work_count": s.actions.count() + s.extra_costs.count(),
@@ -204,7 +206,8 @@ class RoadDetailView(PermissionRequiredMixin, generic.DetailView):
     template_name = "shipments/road_detail.html"
 
     def get_context_data(self, **kwargs):
-        return super().get_context_data(history=history_for(self.object), **kwargs)
+        documents = self.object.documents.select_related("uploaded_by").defer("content", "extracted_text")
+        return super().get_context_data(history=history_for(self.object), documents=documents, doc_types=Document.TYPE_CHOICES, **kwargs)
 
 
 class RoadCreateView(CrudCreateView):
