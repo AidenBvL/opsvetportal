@@ -415,7 +415,7 @@ class SafecubeTests(TestCase):
         self.assertEqual(self.shipment.eta.isoformat(), "2026-11-03T07:00:00+00:00")
         self.assertIsNone(self.shipment.ata)
         self.assertEqual(self.shipment.port_of_loading, "CNQDG")  # de UN/LOCODE die Safecube meegeeft
-        self.assertEqual(self.shipment.terminal, "ECT Euromax")
+        self.assertEqual(self.shipment.terminal, "ECT Euromax Terminal")  # "ECT Euromax" -> volledige naam
 
     def test_no_info_yet_is_pending_and_timeout(self):
         resp = mock.Mock(status_code=200, json=lambda: {"message": "SEALINE_HASNT_PROVIDE_INFO"}, text="")
@@ -476,7 +476,7 @@ class PasteAndQuickUpdateTests(TestCase):
         self.shipment.refresh_from_db()
         self.assertEqual(self.shipment.voyage, "0FAO2E1MA")
         self.assertEqual(self.shipment.port_of_loading, "CNTAO")
-        self.assertEqual(self.shipment.terminal, "ECT EUROMAX ROTTERDAM")
+        self.assertEqual(self.shipment.terminal, "ECT Euromax Terminal")
         self.assertFalse(self.shipment.vessel_changed)
         self.assertIsNotNone(self.shipment.departed_at)
         self.assertEqual(self.shipment.tracking_updates.get().provider, "geplakt")
@@ -497,12 +497,13 @@ class PasteAndQuickUpdateTests(TestCase):
         self.assertEqual(local(self.shipment.ata), "03-10 13:00")
         self.assertEqual(local(self.shipment.discharged_at), "03-10 17:26")
         self.assertEqual(local(self.shipment.departed_at), "11-09 22:33")
-        self.assertEqual((self.shipment.voyage, self.shipment.terminal), ("0EWORS1MA", "HUTCHISON PORT DELTA II"))
+        self.assertEqual((self.shipment.voyage, self.shipment.terminal), ("0EWORS1MA", "Hutchison Ports Delta II"))
         self.assertEqual((self.shipment.port_of_loading, self.shipment.port_of_discharge), ("BRPNG", "NLRTM"))
         self.assertEqual(self.shipment.status, "uitgeleverd")
         self.assertFalse(self.shipment.vessel_changed)
         page = self.client.get(f"/zendingen/zeevracht/{self.shipment.pk}/")
-        self.assertContains(page, "Paranaguá (BRPNG)")
+        self.assertContains(page, "Paranaguá, Brazilië (BRPNG)")
+        self.assertContains(page, "Rotterdam, Nederland (NLRTM)")
 
     def test_quick_update_and_detail_page(self):
         url = f"/zendingen/zeevracht/{self.shipment.pk}/"

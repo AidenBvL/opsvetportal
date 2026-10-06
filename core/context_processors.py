@@ -23,6 +23,7 @@ NAV = [
         ("core:customer_list", "Klanten", "building", "core.view_customer", None),
         ("core:shippingline_list", "Rederijen", "life-preserver", "core.view_shippingline", None),
         ("core:port_list", "Havens", "geo-alt", "core.view_port", None),
+        ("core:terminal_list", "Terminals", "box-seam", "core.view_terminal", None),
         ("core:roadcarrier_list", "Vervoerders", "truck-front", "core.view_roadcarrier", None),
         ("core:inspectionpoint_list", "Keurpunten", "clipboard2-check", "core.view_inspectionpoint", None),
     ]),

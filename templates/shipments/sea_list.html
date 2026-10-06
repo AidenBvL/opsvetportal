@@ -36,7 +36,7 @@
   <div class="table-responsive">
   <table class="table table-hover align-middle">
     <thead><tr>
-      <th data-sort>Container</th><th data-sort>Klant / referentie</th><th data-sort>Rederij</th><th data-sort>Schip / reis</th>
+      <th data-sort>Container</th><th data-sort>Klant / referentie</th><th data-sort>Rederij</th><th data-sort>Schip / reis</th><th data-sort class="col-wide-only">Route / terminal</th>
       <th data-sort="date">ETA</th><th data-sort class="col-wide-only">Keurpunt</th><th data-sort>Keuring</th><th data-sort="num">Vrije dagen</th><th data-sort>Status</th>
     </tr></thead>
     <tbody>
@@ -46,6 +46,7 @@
       <td>{{ s.customer }}<div class="small text-body-secondary font-monospace">{{ s.customer_reference|default:"" }}{% if s.cory_reference %} · {{ s.cory_reference }}{% endif %}</div></td>
       <td>{{ s.shipping_line.scac|default:s.shipping_line|default:"–" }}</td>
       <td>{% if s.vessel_changed %}<span class="vessel-changed" title="Gewisseld van {{ s.original_vessel_name }}"><i class="bi bi-arrow-left-right"></i> {{ s.vessel_name }}</span><div class="small text-body-secondary text-decoration-line-through">{{ s.original_vessel_name }}</div>{% else %}{{ s.vessel_name|default:"–" }}{% endif %}{% if s.voyage %}<div class="small text-body-secondary font-monospace">{{ s.voyage }}</div>{% endif %}</td>
+      <td class="small col-wide-only"><span title="{{ s.port_of_loading|port }} → {{ s.port_of_discharge|port }}">{{ s.port_of_loading|port_name|default:"?" }} → {{ s.port_of_discharge|port_name }}</span>{% if s.terminal %}<div class="text-body-secondary">{{ s.terminal }}</div>{% endif %}</td>
       <td class="text-nowrap" data-value="{{ s.ata|default:s.eta|date:'U' }}">
         {% if s.ata %}<span class="text-success">{{ s.ata|date:"D j/n H:i" }}</span><div class="small text-body-secondary">aangekomen</div>
         {% elif s.eta %}{{ s.eta|date:"D j/n H:i" }}<div class="small text-body-secondary">{{ s.days_to_eta|days_label }}{% if s.eta_delay_hours > 0 %} · <span class="text-warning-emphasis">+{{ s.eta_delay_hours }}u</span>{% elif s.eta_delay_hours < 0 %} · <span class="text-info-emphasis">{{ s.eta_delay_hours }}u</span>{% endif %}</div>
@@ -58,7 +59,7 @@
       <td>{% badge s.status s.get_status_display %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="9"><div class="empty-state"><i class="bi bi-water"></i>Geen containers in deze weergave.{% if perms.shipments.add_seashipment %}<div class="mt-2"><a class="btn btn-sm btn-primary" href="{% url 'shipments:seashipment_create' %}">Container toevoegen</a> <a class="btn btn-sm btn-outline-secondary" href="{% url 'documents:document_create' %}">Uit document</a></div>{% endif %}</div></td></tr>
+    <tr><td colspan="10"><div class="empty-state"><i class="bi bi-water"></i>Geen containers in deze weergave.{% if perms.shipments.add_seashipment %}<div class="mt-2"><a class="btn btn-sm btn-primary" href="{% url 'shipments:seashipment_create' %}">Container toevoegen</a> <a class="btn btn-sm btn-outline-secondary" href="{% url 'documents:document_create' %}">Uit document</a></div>{% endif %}</div></td></tr>
     {% endfor %}
     </tbody>
   </table>

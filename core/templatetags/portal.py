@@ -55,6 +55,14 @@ def port(value):
 
 
 @register.filter
+def port_full(value):
+    """"Paranaguá, Brazilië" (zonder code); de invoer zelf als de haven onbekend is."""
+    from core.ports import port_full_name
+
+    return port_full_name(value) or value
+
+
+@register.filter
 def port_name(value):
     """Alleen de naam (voor krappe plekken); de code als de haven onbekend is."""
     from core.ports import port_index

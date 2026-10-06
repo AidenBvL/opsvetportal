@@ -157,6 +157,24 @@
     });
   });
 
+  // Havenveld: volledige naam tonen bij de code ("BRPNG" -> "Paranaguá, Brazilië").
+  const plain = v => (v || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+  $$("input[data-port-input]").forEach(input => {
+    const list = input.list, label = input.parentElement.querySelector("[data-port-name]");
+    if (!list || !label) return;
+    const update = () => {
+      const value = plain(input.value);
+      if (!value) { label.textContent = ""; return; }
+      const options = Array.from(list.options);
+      const hit = options.find(o => o.value === value.replace(/\s/g, ""))
+        || options.find(o => plain(o.textContent.split(",")[0]) === value.split(/[,(]/)[0].trim());
+      label.textContent = hit ? `${hit.textContent} (${hit.value})` : "Onbekende haven: wordt opgeslagen zoals ingevuld (toe te voegen onder Stamgegevens > Havens).";
+      label.classList.toggle("text-warning-emphasis", !hit);
+    };
+    input.addEventListener("input", update);
+    update();
+  });
+
   // Formulier: waarschuwen bij weggaan met niet-opgeslagen wijzigingen.
   $$("form[data-dirty-warning]").forEach(form => {
     let dirty = false;

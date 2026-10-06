@@ -70,16 +70,19 @@ class SeaListView(CrudListView):
 
             from django.http import HttpResponse
 
+            from core.ports import port_label
+
             response = HttpResponse(content_type="text/csv; charset=utf-8")
             response["Content-Disposition"] = 'attachment; filename="zeevracht.csv"'
             response.write("\ufeff")
             writer = csv.writer(response, delimiter=";")
-            writer.writerow(["Container", "Klant", "Klantref", "Cory ref", "B/L", "Rederij", "Schip", "Reis", "ETA", "ATA",
+            writer.writerow(["Container", "Klant", "Klantref", "Cory ref", "B/L", "Rederij", "Schip", "Reis", "Laadhaven", "Loshaven", "Terminal", "ETA", "ATA",
                              "Keurpunt", "CHED", "Keuring", "Status", "Vrije dagen t/m", "Behandelaar"])
             fmt = lambda d: timezone.localtime(d).strftime("%d-%m-%Y %H:%M") if d else ""  # noqa: E731
             for s in self.object_list:
                 writer.writerow([s.container_number, s.customer, s.customer_reference, s.cory_reference, s.bl_number,
-                                 s.shipping_line or "", s.vessel_name, s.voyage, fmt(s.eta), fmt(s.ata), s.inspection_point or "",
+                                 s.shipping_line or "", s.vessel_name, s.voyage, port_label(s.port_of_loading),
+                                 port_label(s.port_of_discharge), s.terminal, fmt(s.eta), fmt(s.ata), s.inspection_point or "",
                                  s.ched_number, s.get_inspection_status_display(), s.get_status_display(),
                                  s.free_time_until.strftime("%d-%m-%Y") if s.free_time_until else "", s.handler or ""])
             return response

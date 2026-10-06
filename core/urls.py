@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .crud import crud_urls
-from .models import Customer, InspectionPoint, Port, RoadCarrier, ShippingLine
+from .models import Customer, InspectionPoint, Port, RoadCarrier, ShippingLine, Terminal
 from . import views
 
 app_name = "core"
@@ -47,6 +47,13 @@ urlpatterns = [
         list_display=["locode", "name", "aliases", "active"],
         search_fields=["locode", "name", "aliases"],
         list_filters=["active"],
+    ),
+    *crud_urls(
+        Terminal, "core", slug="terminals",
+        fields=["name", "port", "aliases", "active"],
+        list_display=["name", "port", "aliases", "active"],
+        search_fields=["name", "aliases", "port__name", "port__locode"],
+        list_filters=["port", "active"],
     ),
     path("accounts/", views.UserListView.as_view(), name="user_list"),
     path("accounts/nieuw/", views.UserCreateView.as_view(), name="user_create"),
