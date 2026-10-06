@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: opsvet
+      POSTGRES_USER: opsvet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wijzig-mij}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  web:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://opsvet:${POSTGRES_PASSWORD:-wijzig-mij}@db:5432/opsvet
+      MEDIA_ROOT: /data/media
+    volumes:
+      - media:/data/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  # Haalt elke 30 minuten de nieuwste ETA / het zeeschip op voor alle open containers.
+  tracking:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://opsvet:${POSTGRES_PASSWORD:-wijzig-mij}@db:5432/opsvet
+    command: python manage.py refresh_tracking --loop 30
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
+  media:

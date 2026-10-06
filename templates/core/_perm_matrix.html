@@ -1,0 +1,11 @@
+{% load portal %}
+<div class="table-responsive"><table class="table table-sm perm-matrix">
+<thead class="table-light"><tr><th>Onderdeel</th><th>Bekijken</th><th>Toevoegen</th><th>Wijzigen</th><th>Verwijderen</th><th>Speciaal</th></tr></thead>
+<tbody>
+{% for row in rows %}
+<tr><td>{{ row.label }}</td>
+  <td>{% with item=row.standard|get_item:"view" %}{% if item %}<input class="form-check-input" type="checkbox" name="{{ field_name }}" value="{{ item.id }}"{% if item.checked %} checked{% endif %} title="{{ item.name }}">{% endif %}{% endwith %}</td><td>{% with item=row.standard|get_item:"add" %}{% if item %}<input class="form-check-input" type="checkbox" name="{{ field_name }}" value="{{ item.id }}"{% if item.checked %} checked{% endif %} title="{{ item.name }}">{% endif %}{% endwith %}</td><td>{% with item=row.standard|get_item:"change" %}{% if item %}<input class="form-check-input" type="checkbox" name="{{ field_name }}" value="{{ item.id }}"{% if item.checked %} checked{% endif %} title="{{ item.name }}">{% endif %}{% endwith %}</td><td>{% with item=row.standard|get_item:"delete" %}{% if item %}<input class="form-check-input" type="checkbox" name="{{ field_name }}" value="{{ item.id }}"{% if item.checked %} checked{% endif %} title="{{ item.name }}">{% endif %}{% endwith %}</td>
+  <td class="text-start">{% for item in row.extra %}<label class="small d-block"><input class="form-check-input" type="checkbox" name="{{ field_name }}" value="{{ item.id }}"{% if item.checked %} checked{% endif %}> {{ item.name }}</label>{% endfor %}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>

@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Document uploaden</h3>
+<p class="text-muted">Upload een B/L, arrival notice, CHED of ander document (PDF of scan). Het portaal leest de tekst uit (PDF-tekstlaag, anders OCR via Tesseract) en herkent containernummers, B/L, schip, reis, ETA, havens en CHED-nummer. Daarna controleer je de gegevens en maak je in één keer de dossiers aan.</p>
+<div class="card" style="max-width:640px"><div class="card-body"><form method="post" enctype="multipart/form-data">{% csrf_token %}{% include "core/_form_fields.html" with cols=12 %}<button class="btn btn-primary"><i class="bi bi-upload"></i> Uploaden en uitlezen</button></form></div></div>
+{% endblock %}

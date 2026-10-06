@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Verwijderen</h3>
+<div class="card"><div class="card-body">
+<p>Weet je zeker dat je <strong>{{ object }}</strong> ({{ verbose_name }}) wilt verwijderen? Dit kan niet ongedaan worden gemaakt.</p>
+<form method="post">{% csrf_token %}<button class="btn btn-danger">Ja, verwijderen</button> <a href="{{ list_url }}" class="btn btn-outline-secondary">Annuleren</a></form>
+</div></div>
+{% endblock %}

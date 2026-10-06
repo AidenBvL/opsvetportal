@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Overlegpunt bewerken</h3>
+<p class="text-muted">{{ object.meeting }}</p>
+<div class="card"><div class="card-body">
+<form method="post">{% csrf_token %}{% include "core/_form_fields.html" %}
+<button class="btn btn-primary">Opslaan</button> <a class="btn btn-outline-secondary" href="{% url 'meetings:day' %}?datum={{ object.meeting.date|date:'Y-m-d' }}">Annuleren</a></form>
+</div></div>
+{% endblock %}

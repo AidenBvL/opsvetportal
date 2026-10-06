@@ -1,0 +1,6 @@
+{% extends "core/generic_list.html" %}{% load portal %}
+{% block row %}
+<td><a href="{% url 'actions:action_detail' obj.pk %}">{{ obj.title }}</a></td>
+<td>{% badge obj.kind obj.get_kind_display %}</td><td>{% badge obj.status obj.get_status_display %}</td><td>{{ obj|priority_badge }}</td>
+<td>{{ obj.owner|default:"-" }}</td><td>{{ obj.customer|default:"-" }}</td><td class="{% if obj.is_overdue %}text-danger fw-semibold{% endif %}">{{ obj.due_date|date:"d-m-Y"|default:"-" }}</td>
+{% endblock %}

@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Meerdere containers aanmaken</h3>
+<p class="text-muted">Handig als één B/L of boeking meerdere containers bevat. Containernummers worden gecontroleerd op het ISO 6346 controlecijfer.</p>
+<div class="card"><div class="card-body"><form method="post">{% csrf_token %}{% include "core/_form_fields.html" %}<button class="btn btn-primary">Aanmaken</button></form></div></div>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% load portal %}
+{% block title %}{{ object }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <h3 class="mb-0">{{ object.title }}</h3>{% badge object.kind object.get_kind_display %} {% badge object.status object.get_status_display %} {{ object|priority_badge }}
+  <div class="ms-auto">{% if perms.actions.change_action %}<a class="btn btn-sm btn-primary" href="{% url 'actions:action_update' object.pk %}"><i class="bi bi-pencil"></i> Bewerken</a>{% endif %}
+  {% if perms.actions.delete_action %}<a class="btn btn-sm btn-outline-danger" href="{% url 'actions:action_delete' object.pk %}"><i class="bi bi-trash"></i></a>{% endif %}</div>
+</div>
+<div class="row g-3">
+<div class="col-lg-5"><div class="card mb-3"><div class="card-body small">
+  <dl class="row mb-0">
+    <dt class="col-5">Eigenaar</dt><dd class="col-7">{{ object.owner|default:"-" }}</dd>
+    <dt class="col-5">Deadline</dt><dd class="col-7{% if object.is_overdue %} text-danger fw-semibold{% endif %}">{{ object.due_date|date:"l j F Y"|default:"-" }}</dd>
+    {% if object.kind == 'escalatie' %}<dt class="col-5">Escalatieniveau</dt><dd class="col-7">{{ object.get_escalation_level_display }}</dd>
+    <dt class="col-5">Geëscaleerd naar</dt><dd class="col-7">{{ object.escalated_to|default:"-" }}</dd>{% endif %}
+    <dt class="col-5">Klant</dt><dd class="col-7">{% if object.customer %}<a href="{% url 'core:customer_detail' object.customer.pk %}">{{ object.customer }}</a>{% else %}-{% endif %}</dd>
+    <dt class="col-5">Zeevracht</dt><dd class="col-7">{% if object.sea_shipment %}<a href="{% url 'shipments:sea_detail' object.sea_shipment.pk %}">{{ object.sea_shipment }}</a>{% else %}-{% endif %}</dd>
+    <dt class="col-5">Wegtransport</dt><dd class="col-7">{% if object.road_transport %}<a href="{% url 'shipments:road_detail' object.road_transport.pk %}">{{ object.road_transport }}</a>{% else %}-{% endif %}</dd>
+    {% if object.meeting_item %}<dt class="col-5">Uit overleg</dt><dd class="col-7"><a href="{% url 'meetings:day' %}?datum={{ object.meeting_item.meeting.date|date:'Y-m-d' }}">{{ object.meeting_item.meeting }}</a></dd>{% endif %}
+    <dt class="col-5">Aangemaakt</dt><dd class="col-7">{{ object.created_at|date:"j M Y H:i" }} {% if object.created_by %}door {{ object.created_by }}{% endif %}</dd>
+    {% if object.completed_at %}<dt class="col-5">Afgerond</dt><dd class="col-7">{{ object.completed_at|date:"j M Y H:i" }}</dd>{% endif %}
+  </dl>
+  {% if object.description %}<hr><div style="white-space:pre-wrap">{{ object.description }}</div>{% endif %}
+  {% if object.resolution %}<hr><strong>Afhandeling</strong><div style="white-space:pre-wrap">{{ object.resolution }}</div>{% endif %}
+</div></div>
+{% if perms.actions.change_action and object.is_open %}
+<form method="post" action="{% url 'actions:set_status' object.pk %}" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
+  <button class="btn btn-sm btn-outline-primary" name="status" value="bezig">In behandeling</button>
+  <button class="btn btn-sm btn-outline-warning" name="status" value="wacht">Wacht op derden</button>
+  <button class="btn btn-sm btn-success" name="status" value="gereed">Gereed</button>
+  <button class="btn btn-sm btn-outline-danger ms-auto" name="escalate" value="1"><i class="bi bi-arrow-up"></i> Escaleer</button>
+</form>{% endif %}
+</div>
+<div class="col-lg-7"><div class="card"><div class="card-header d-flex">Extra kosten <span class="ms-auto">{{ total|euro }}</span></div>
+  <div class="card-body">{% include "core/_cost_totals.html" %}</div>
+  <table class="table table-sm mb-0"><thead class="table-light"><tr><th>Datum</th><th>Omschrijving</th><th>Soort</th><th class="text-end">Bedrag</th><th>Verantwoordelijk</th><th>Status</th><th></th></tr></thead>
+  {% for c in costs %}<tr><td>{{ c.cost_date|date:"d-m" }}</td><td>{{ c.description }}</td><td>{{ c.get_cost_type_display }}</td><td class="text-end">{{ c.amount|euro }}{% if c.currency != 'EUR' %} {{ c.currency }}{% endif %}</td><td>{% badge c.responsibility c.get_responsibility_display %}</td><td>{{ c.get_status_display }}</td>
+    <td>{% if perms.actions.change_extracost %}<a href="{% url 'actions:extracost_update' c.pk %}"><i class="bi bi-pencil"></i></a>{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="text-muted text-center">Nog geen kosten.</td></tr>{% endfor %}
+  </table>
+  {% if perms.actions.add_extracost %}
+  <div class="card-body border-top"><form method="post" action="{% url 'actions:add_cost' object.pk %}" class="row g-2 align-items-end">{% csrf_token %}
+    <div class="col-md-3"><label class="small">Soort</label>{{ cost_form.cost_type|bs }}</div>
+    <div class="col-md-4"><label class="small">Omschrijving</label>{{ cost_form.description|bs }}</div>
+    <div class="col-md-2"><label class="small">Bedrag</label>{{ cost_form.amount|bs }}</div>
+    <div class="col-md-1"><label class="small">Valuta</label>{{ cost_form.currency|bs }}</div>
+    <div class="col-md-2"><label class="small">Status</label>{{ cost_form.status|bs }}</div>
+    <div class="col-md-8"><label class="small d-block">Verantwoordelijk</label>{% for choice in cost_form.responsibility %}<div class="form-check form-check-inline">{{ choice.tag }} <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label></div>{% endfor %}</div>
+    <div class="col-md-4 text-end"><button class="btn btn-sm btn-primary"><i class="bi bi-plus"></i> Kosten toevoegen</button></div>
+  </form></div>
+  {% endif %}
+</div></div>
+</div>
+{% endblock %}

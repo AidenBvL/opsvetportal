@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Accounts & rechten{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3"><h3 class="mb-0">Accounts & rechten</h3>
+  {% if perms.auth.add_user %}<a class="btn btn-primary btn-sm ms-auto" href="{% url 'core:user_create' %}"><i class="bi bi-person-plus"></i> Nieuw account</a>{% endif %}</div>
+<div class="row g-3">
+<div class="col-lg-8"><div class="card"><div class="card-header">Accounts</div>
+<table class="table table-sm table-hover mb-0"><thead class="table-light"><tr><th>Gebruikersnaam</th><th>Naam</th><th>E-mail</th><th>Rollen</th><th>Medewerker</th><th>Status</th><th>Laatst ingelogd</th></tr></thead>
+{% for u in object_list %}<tr>
+  <td>{% if perms.auth.change_user %}<a href="{% url 'core:user_update' u.pk %}">{{ u.username }}</a>{% else %}{{ u.username }}{% endif %}</td>
+  <td>{{ u.get_full_name }}</td><td>{{ u.email }}</td>
+  <td>{% if u.is_superuser %}<span class="badge text-bg-danger">Beheerder (alles)</span>{% endif %}{% for g in u.groups.all %}<span class="badge text-bg-secondary">{{ g }}</span> {% endfor %}</td>
+  <td>{{ u.employee|default:"-" }}</td>
+  <td>{% if u.is_active %}<span class="badge text-bg-success">actief</span>{% else %}<span class="badge text-bg-light text-dark">geblokkeerd</span>{% endif %}</td>
+  <td class="small">{{ u.last_login|date:"j M Y H:i"|default:"nooit" }}</td></tr>{% endfor %}
+</table></div></div>
+<div class="col-lg-4"><div class="card"><div class="card-header d-flex">Rollen{% if perms.auth.add_group %}<a class="ms-auto small" href="{% url 'core:group_create' %}">+ nieuwe rol</a>{% endif %}</div>
+<ul class="list-group list-group-flush">{% for g in groups %}<li class="list-group-item d-flex">{% if perms.auth.change_group %}<a href="{% url 'core:group_update' g.pk %}">{{ g.name }}</a>{% else %}{{ g.name }}{% endif %}<span class="ms-auto small text-muted">{{ g.n_users }} account(s) · {{ g.n_perms }} rechten</span></li>{% empty %}<li class="list-group-item text-muted">Nog geen rollen. Draai <code>manage.py setup_roles</code>.</li>{% endfor %}</ul>
+<div class="card-body small text-muted">Een account krijgt de rechten van al zijn rollen plus eventuele extra rechten. Pas de rechten per rol aan door op de naam te klikken.</div>
+</div></div>
+</div>
+{% endblock %}

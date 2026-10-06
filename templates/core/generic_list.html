@@ -1,0 +1,50 @@
+{% extends "base.html" %}{% load portal %}
+{% block title %}{{ verbose_name_plural|capfirst }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h3 class="mb-0">{{ verbose_name_plural|capfirst }}</h3>
+  <span class="badge text-bg-light ms-2">{% if paginator %}{{ paginator.count }}{% else %}{{ object_list|length }}{% endif %}</span>
+  {% block list_actions %}{% endblock %}
+  {% if create_url %}<a href="{{ create_url }}" class="btn btn-primary btn-sm ms-auto"><i class="bi bi-plus-lg"></i> Nieuw</a>{% endif %}
+</div>
+{% block list_header %}{% endblock %}
+{% if searchable or filters %}
+<form class="row g-2 mb-3" method="get">
+  {% if searchable %}<div class="col-md-3"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Zoeken…"></div>{% endif %}
+  {% for f in filters %}
+  <div class="col-md-2"><select name="{{ f.name }}" class="form-select form-select-sm" onchange="this.form.submit()">
+    <option value="">{{ f.label|capfirst }}: alle</option>
+    {% for value, label in f.options %}<option value="{{ value }}"{% if value == f.value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select></div>
+  {% endfor %}
+  {% block extra_filters %}{% endblock %}
+  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">Filter</button></div>
+</form>
+{% endif %}
+<div class="card"><div class="table-responsive">
+<table class="table table-sm table-hover mb-0">
+  <thead class="table-light"><tr>{% block thead %}{% for c in columns %}<th>{{ c.label|capfirst }}</th>{% endfor %}{% endblock %}<th></th></tr></thead>
+  <tbody>
+  {% for obj in object_list %}
+    <tr>{% block row %}
+      {% for c in columns %}<td>{% if forloop.first %}{% if detail_url_name %}<a href="{% obj_url detail_url_name obj %}">{% cell obj c.name %}</a>{% elif can_change %}<a href="{% obj_url update_url_name obj %}">{% cell obj c.name %}</a>{% else %}{% cell obj c.name %}{% endif %}{% else %}{% cell obj c.name %}{% endif %}</td>{% endfor %}
+      {% endblock %}
+      <td class="text-end text-nowrap">
+        {% if can_change %}<a class="btn btn-sm btn-link p-0 me-2" href="{% obj_url update_url_name obj %}" title="Bewerken"><i class="bi bi-pencil"></i></a>{% endif %}
+        {% if can_delete %}<a class="btn btn-sm btn-link p-0 text-danger" href="{% obj_url delete_url_name obj %}" title="Verwijderen"><i class="bi bi-trash"></i></a>{% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="20" class="text-center text-muted py-4">Nog niets gevonden.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% if is_paginated %}
+<nav class="mt-2"><ul class="pagination pagination-sm">
+  {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="{% querystring_with page=page_obj.previous_page_number %}">‹</a></li>{% endif %}
+  <li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ paginator.num_pages }}</span></li>
+  {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="{% querystring_with page=page_obj.next_page_number %}">›</a></li>{% endif %}
+</ul></nav>
+{% endif %}
+{% endblock %}

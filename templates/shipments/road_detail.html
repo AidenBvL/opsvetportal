@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% load portal %}
+{% block title %}{{ object }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h3 class="mb-0"><i class="bi bi-truck"></i> {{ object.cory_reference|default:object.customer_reference|default:object.pk }}</h3>
+  {% badge object.status object.get_status_display %} {% badge object.inspection_status object.get_inspection_status_display %}
+  <a class="ms-2" href="{% url 'core:customer_detail' object.customer.pk %}">{{ object.customer }}</a>
+  <div class="ms-auto">
+    {% if perms.actions.add_action %}<a class="btn btn-sm btn-outline-danger" href="{% url 'actions:action_create' %}?road_transport={{ object.pk }}&customer={{ object.customer_id }}">+ Actie</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'actions:extracost_create' %}?road_transport={{ object.pk }}&customer={{ object.customer_id }}">+ Kosten</a>{% endif %}
+    {% if perms.shipments.change_roadtransport %}<a class="btn btn-sm btn-primary" href="{% url 'shipments:roadtransport_update' object.pk %}"><i class="bi bi-pencil"></i> Bewerken</a>{% endif %}
+  </div>
+</div>
+<div class="row g-3">
+<div class="col-md-6"><div class="card"><div class="card-body small"><dl class="row mb-0">
+  <dt class="col-4">Klantreferentie</dt><dd class="col-8">{{ object.customer_reference|default:"-" }}</dd>
+  <dt class="col-4">Richting</dt><dd class="col-8">{{ object.get_direction_display }}</dd>
+  <dt class="col-4">Vervoerder</dt><dd class="col-8">{{ object.carrier|default:"-" }}{% if object.carrier.phone %} · {{ object.carrier.phone }}{% endif %}</dd>
+  <dt class="col-4">Kenteken</dt><dd class="col-8">{{ object.truck_plate|default:"-" }} / {{ object.trailer_plate|default:"-" }}</dd>
+  <dt class="col-4">Chauffeur</dt><dd class="col-8">{{ object.driver_name|default:"-" }} {{ object.driver_phone }}</dd>
+  <dt class="col-4">CMR</dt><dd class="col-8">{{ object.cmr_number|default:"-" }}</dd>
+  <dt class="col-4">Zeecontainer</dt><dd class="col-8">{% if object.sea_shipment %}<a href="{% url 'shipments:sea_detail' object.sea_shipment.pk %}">{{ object.sea_shipment }}</a>{% else %}-{% endif %}</dd>
+  <dt class="col-4">Goederen</dt><dd class="col-8">{{ object.goods_description|default:"-" }}{% if object.temperature_setpoint is not None %} · {{ object.temperature_setpoint }} °C{% endif %}{% if object.pallets %} · {{ object.pallets }} pallets{% endif %}</dd>
+  <dt class="col-4">Behandelaar</dt><dd class="col-8">{{ object.handler|default:"-" }}</dd>
+</dl></div></div></div>
+<div class="col-md-6"><div class="card"><div class="card-body small"><dl class="row mb-0">
+  <dt class="col-4">Laden</dt><dd class="col-8">{{ object.loading_at|date:"l j F H:i"|default:"-" }}<br>{{ object.loading_place }}</dd>
+  <dt class="col-4">Lossen gepland</dt><dd class="col-8">{{ object.delivery_planned_at|date:"l j F H:i"|default:"-" }}<br>{{ object.unloading_place }}</dd>
+  <dt class="col-4">Geleverd</dt><dd class="col-8">{{ object.delivered_at|date:"j F H:i"|default:"-" }}</dd>
+  <dt class="col-4">Keurpunt</dt><dd class="col-8">{{ object.inspection_point|default:"-" }}</dd>
+  <dt class="col-4">CHED</dt><dd class="col-8">{{ object.ched_number|default:"-" }}</dd>
+  <dt class="col-4">Keuring gepland</dt><dd class="col-8">{{ object.inspection_planned_at|date:"j F H:i"|default:"-" }}</dd>
+</dl>{% if object.notes %}<hr><div style="white-space:pre-wrap">{{ object.notes }}</div>{% endif %}</div></div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base.html" %}{% load portal %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h3 class="mb-0">Goedendag{% if employee %}, {{ employee.first_name }}{% endif %}</h3>
+  <span class="text-muted ms-3">{{ today|date:"l j F Y" }}</span>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-2"><a class="card p-3 text-decoration-none" href="{% url 'actions:dashboard' %}"><div class="small text-muted">Open acties</div><div class="stat">{{ open_actions_count }}</div></a></div>
+  <div class="col-6 col-md-2"><a class="card p-3 text-decoration-none text-danger" href="{% url 'actions:dashboard' %}?soort=escalatie"><div class="small text-muted">Escalaties</div><div class="stat">{{ escalations_count }}</div></a></div>
+  <div class="col-6 col-md-2"><a class="card p-3 text-decoration-none text-warning" href="{% url 'actions:dashboard' %}"><div class="small text-muted">Over deadline</div><div class="stat">{{ overdue|length }}</div></a></div>
+  <div class="col-6 col-md-2"><a class="card p-3 text-decoration-none" href="{% url 'shipments:sea_list' %}?weergave=keuring"><div class="small text-muted">CHED nog aanmelden</div><div class="stat">{{ inspection_todo }}</div></a></div>
+  <div class="col-6 col-md-2"><a class="card p-3 text-decoration-none" href="{% url 'shipments:sea_list' %}?weergave=gewisseld"><div class="small text-muted">Schipwissels</div><div class="stat">{{ vessel_changes|length }}</div></a></div>
+  <div class="col-6 col-md-2"><a class="card p-3 text-decoration-none" href="{% url 'meetings:open_items' %}"><div class="small text-muted">Open overlegvragen</div><div class="stat">{{ open_questions }}</div></a></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-calendar3"></i> Vandaag</div>
+      <div class="card-body">
+        <div class="mb-2"><span class="text-muted small">Dienst:</span>
+          {% for s in shifts_today %}<span class="shift-pill{% if s.shift_type == 'zaterdag' %} sat{% endif %}">{{ s.get_shift_type_display }}: {{ s.employee }}</span>{% empty %}<span class="text-muted">geen</span>{% endfor %}</div>
+        <div><span class="text-muted small">Thuis:</span>
+          {% for w in wfh_today %}<span class="wfh-pill">{{ w.employee }}</span>{% empty %}<span class="text-muted">niemand</span>{% endfor %}</div>
+        <hr>
+        <div class="small text-muted mb-1">Komende diensten</div>
+        <table class="table table-sm mb-0">{% for s in shifts_upcoming %}<tr><td>{{ s.date|date:"D j M" }}</td><td>{{ s.get_shift_type_display }}</td><td>{{ s.employee }}</td></tr>{% endfor %}</table>
+        {% if my_shifts %}<div class="small text-muted mt-2">Mijn diensten: {% for s in my_shifts %}{{ s.date|date:"D j/n" }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+      </div>
+    </div>
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-currency-euro"></i> Extra kosten deze maand</div>
+      <div class="card-body">{% include "core/_cost_totals.html" %}</div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header d-flex"><span><i class="bi bi-water"></i> Aankomsten komende 7 dagen</span><a class="ms-auto small" href="{% url 'shipments:sea_list' %}">alle zeevracht</a></div>
+      <div class="table-responsive"><table class="table table-sm table-hover mb-0">
+        <thead class="table-light"><tr><th>ETA</th><th>Container</th><th>Klant</th><th>Schip</th><th>Keurpunt</th><th>Keuring</th></tr></thead>
+        {% for s in arrivals %}
+        <tr><td>{{ s.eta|date:"D j/n H:i" }}{% if s.eta_delay_hours > 0 %} <span class="badge text-bg-warning">+{{ s.eta_delay_hours }}u</span>{% endif %}</td>
+          <td><a href="{% url 'shipments:sea_detail' s.pk %}">{{ s.container_number }}</a></td><td>{{ s.customer }}</td>
+          <td{% if s.vessel_changed %} class="vessel-changed" title="Van schip gewisseld"{% endif %}>{{ s.vessel_name|default:"-" }}{% if s.vessel_changed %} <i class="bi bi-arrow-left-right"></i>{% endif %}</td>
+          <td>{{ s.inspection_point|default:"-" }}</td><td>{% badge s.inspection_status s.get_inspection_status_display %}</td></tr>
+        {% empty %}<tr><td colspan="6" class="text-muted text-center py-3">Geen aankomsten gepland.</td></tr>{% endfor %}
+      </table></div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="card h-100"><div class="card-header text-danger"><i class="bi bi-exclamation-octagon"></i> Escalaties</div>
+          <ul class="list-group list-group-flush">
+          {% for a in escalations %}<li class="list-group-item"><a href="{% url 'actions:action_detail' a.pk %}">{{ a.title }}</a><div class="small text-muted">Niveau {{ a.escalation_level }} · {{ a.customer|default:"" }} · {{ a.owner|default:"geen eigenaar" }}</div></li>
+          {% empty %}<li class="list-group-item text-muted">Geen open escalaties 🎉</li>{% endfor %}
+          </ul></div>
+      </div>
+      <div class="col-md-6">
+        <div class="card h-100"><div class="card-header text-warning"><i class="bi bi-alarm"></i> Over deadline</div>
+          <ul class="list-group list-group-flush">
+          {% for a in overdue %}<li class="list-group-item"><a href="{% url 'actions:action_detail' a.pk %}">{{ a.title }}</a><div class="small text-muted">{{ a.due_date|date:"j M" }} · {{ a.owner|default:"geen eigenaar" }}</div></li>
+          {% empty %}<li class="list-group-item text-muted">Alles op schema.</li>{% endfor %}
+          </ul></div>
+      </div>
+      {% if demurrage_risk %}
+      <div class="col-md-6">
+        <div class="card h-100"><div class="card-header"><i class="bi bi-hourglass-split"></i> Vrije dagen bijna op</div>
+          <ul class="list-group list-group-flush">{% for s in demurrage_risk %}<li class="list-group-item"><a href="{% url 'shipments:sea_detail' s.pk %}">{{ s.container_number }}</a> · {{ s.customer }} · t/m {{ s.free_time_until|date:"j M" }}</li>{% endfor %}</ul></div>
+      </div>
+      {% endif %}
+      <div class="col-md-6">
+        <div class="card h-100"><div class="card-header"><i class="bi bi-broadcast"></i> Tracking meldingen (48u)</div>
+          <ul class="list-group list-group-flush">{% for u in recent_tracking %}<li class="list-group-item small"><a href="{% url 'shipments:sea_detail' u.shipment.pk %}">{{ u.shipment.container_number }}</a>: {{ u.message }}</li>{% empty %}<li class="list-group-item text-muted">Geen wijzigingen.</li>{% endfor %}</ul></div>
+      </div>
+      {% if road_today %}
+      <div class="col-md-6">
+        <div class="card h-100"><div class="card-header"><i class="bi bi-truck"></i> Wegtransport vandaag</div>
+          <ul class="list-group list-group-flush">{% for r in road_today %}<li class="list-group-item small"><a href="{% url 'shipments:road_detail' r.pk %}">{{ r }}</a> · {{ r.carrier|default:"" }} · {% badge r.status r.get_status_display %}</li>{% endfor %}</ul></div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

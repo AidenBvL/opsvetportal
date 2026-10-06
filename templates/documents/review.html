@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% load portal %}
+{% block content %}
+<div class="d-flex align-items-center mb-3"><h3 class="mb-0">Controleren: {{ document }}</h3>
+  {% badge document.status document.get_status_display %}<span class="small text-muted ms-2">{{ document.extraction_method }}</span>
+  <form method="post" action="{% url 'documents:reprocess' document.pk %}" class="ms-auto">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Opnieuw uitlezen</button></form>
+</div>
+{% if document.error %}<div class="alert alert-danger">{{ document.error }}</div>{% endif %}
+{% if existing %}<div class="alert alert-info py-2 small">Deze containers bestaan al als open dossier en worden aangevuld i.p.v. dubbel aangemaakt: {% for s in existing %}<a href="{% url 'shipments:sea_detail' s.pk %}">{{ s.container_number }}</a> ({{ s.customer }}){% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+<div class="row g-3">
+<div class="col-lg-7"><div class="card"><div class="card-header">Herkende gegevens - controleer en vul aan</div><div class="card-body">
+  {% if containers %}<div class="small mb-2">{% for c in containers %}<span class="badge text-bg-light text-dark border">{{ c.container_number }}{% if c.container_type %} · {{ c.container_type }}{% endif %}{% if c.seal_number %} · zegel {{ c.seal_number }}{% endif %}</span> {% endfor %}</div>{% endif %}
+  <form method="post">{% csrf_token %}{% include "core/_form_fields.html" %}<button class="btn btn-primary"><i class="bi bi-check2-all"></i> Dossiers aanmaken / bijwerken</button></form>
+</div></div></div>
+<div class="col-lg-5"><div class="card"><div class="card-header d-flex">Herkende tekst<a class="ms-auto small" href="{{ document.file.url }}" target="_blank">origineel openen</a></div>
+  <pre class="card-body small mb-0" style="max-height:70vh;overflow:auto;white-space:pre-wrap">{{ document.extracted_text|default:"(geen tekst)" }}</pre></div></div>
+</div>
+{% endblock %}

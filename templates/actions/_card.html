@@ -1,0 +1,20 @@
+{% load portal %}
+<div class="border rounded p-2 mb-2 bg-white{% if a.is_overdue %} border-danger{% endif %}">
+  <div class="d-flex"><a class="fw-semibold" href="{% url 'actions:action_detail' a.pk %}">{{ a.title }}</a><span class="ms-auto">{{ a|priority_badge }}</span></div>
+  <div class="small text-muted">
+    {% if a.owner %}<i class="bi bi-person"></i> {{ a.owner.first_name }}{% endif %}
+    {% if a.customer %} · {{ a.customer }}{% endif %}
+    {% if a.sea_shipment %} · {{ a.sea_shipment.container_number }}{% endif %}
+    {% if a.due_date %} · <span class="{% if a.is_overdue %}text-danger fw-semibold{% endif %}"><i class="bi bi-calendar-event"></i> {{ a.due_date|date:"j M" }}</span>{% endif %}
+    {% if a.cost_total %} · {{ a.cost_total|euro }}{% endif %}
+  </div>
+  {% if perms.actions.change_action %}
+  <form method="post" action="{% url 'actions:set_status' a.pk %}" class="d-flex gap-1 mt-1">{% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    {% if a.status != 'bezig' %}<button class="btn btn-xs btn-sm py-0 btn-outline-primary" name="status" value="bezig">oppakken</button>{% endif %}
+    {% if a.status != 'wacht' %}<button class="btn btn-sm py-0 btn-outline-warning" name="status" value="wacht">wacht</button>{% endif %}
+    <button class="btn btn-sm py-0 btn-outline-success" name="status" value="gereed">gereed</button>
+    {% if a.escalation_level != 4 %}<button class="btn btn-sm py-0 btn-outline-danger ms-auto" name="escalate" value="1" title="Escaleer een niveau hoger"><i class="bi bi-arrow-up"></i></button>{% endif %}
+  </form>
+  {% endif %}
+</div>

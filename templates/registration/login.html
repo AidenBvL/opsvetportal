@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Inloggen{% endblock %}
+{% block anonymous %}
+<div class="container" style="max-width:380px;margin-top:12vh">
+  <div class="card p-4">
+    <h4 class="mb-3"><i class="bi bi-box-seam"></i> OPS/VET Portaal</h4>
+    <form method="post">{% csrf_token %}
+      {% if form.errors %}<div class="alert alert-danger py-2">Onjuiste gebruikersnaam of wachtwoord.</div>{% endif %}
+      <div class="mb-2"><label class="form-label">Gebruikersnaam</label><input class="form-control" name="username" autofocus required></div>
+      <div class="mb-3"><label class="form-label">Wachtwoord</label><input class="form-control" type="password" name="password" required></div>
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn btn-primary w-100">Inloggen</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

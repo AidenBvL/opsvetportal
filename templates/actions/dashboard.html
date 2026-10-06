@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% load portal %}
+{% block title %}Acties & escalaties{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h3 class="mb-0">Acties & escalaties</h3>
+  <a class="btn btn-sm btn-link" href="{% url 'actions:action_list' %}">lijstweergave</a>
+  <div class="ms-auto">
+    {% if perms.actions.add_action %}
+    <a class="btn btn-sm btn-primary" href="{% url 'actions:action_create' %}"><i class="bi bi-plus"></i> Actie</a>
+    <a class="btn btn-sm btn-danger" href="{% url 'actions:action_create' %}?kind=escalatie&priority=3"><i class="bi bi-exclamation-triangle"></i> Escalatie</a>{% endif %}
+  </div>
+</div>
+<form class="row g-2 mb-3">
+  <div class="col-md-3"><input class="form-control form-control-sm" name="q" placeholder="Zoek titel/container…" value="{{ params.q }}"></div>
+  <div class="col-md-2"><select class="form-select form-select-sm" name="soort" onchange="this.form.submit()"><option value="">Acties + escalaties</option><option value="actie"{% if params.soort == 'actie' %} selected{% endif %}>Alleen acties</option><option value="escalatie"{% if params.soort == 'escalatie' %} selected{% endif %}>Alleen escalaties</option></select></div>
+  <div class="col-md-2"><select class="form-select form-select-sm" name="eigenaar" onchange="this.form.submit()"><option value="">Alle eigenaren</option>{% for e in employees %}<option value="{{ e.pk }}"{% if params.eigenaar == e.pk|stringformat:"s" %} selected{% endif %}>{{ e }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><select class="form-select form-select-sm" name="klant" onchange="this.form.submit()"><option value="">Alle klanten</option>{% for c in customers %}<option value="{{ c.pk }}"{% if params.klant == c.pk|stringformat:"s" %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+</form>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="card p-3"><div class="small text-muted">Over deadline</div><div class="stat text-danger">{{ overdue|length }}</div></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="small text-muted">Deadline vandaag</div><div class="stat text-warning">{{ due_today|length }}</div></div></div>
+  <div class="col-md-6"><div class="card p-3"><div class="small text-muted mb-1">Kosten op open dossiers per verantwoordelijke</div>{% include "core/_cost_totals.html" %}</div></div>
+</div>
+
+<h5 class="text-danger"><i class="bi bi-exclamation-octagon"></i> Escalaties</h5>
+<div class="row g-3 mb-4">
+{% for lvl in escalation_levels %}
+  <div class="col-md-3"><div class="card h-100 kanban-col"><div class="card-header small">{{ lvl.label }} <span class="badge text-bg-danger">{{ lvl.items|length }}</span></div>
+  <div class="card-body p-2 bg-light">{% for a in lvl.items %}{% include "actions/_card.html" %}{% empty %}<div class="text-muted small text-center">-</div>{% endfor %}</div></div></div>
+{% endfor %}
+</div>
+
+<h5><i class="bi bi-check2-square"></i> Acties</h5>
+<div class="row g-3 mb-4">
+{% for col in columns %}
+  <div class="col-md-4"><div class="card h-100 kanban-col"><div class="card-header small">{{ col.label }} <span class="badge text-bg-secondary">{{ col.items|length }}</span></div>
+  <div class="card-body p-2 bg-light">{% for a in col.items %}{% include "actions/_card.html" %}{% empty %}<div class="text-muted small text-center">-</div>{% endfor %}</div></div></div>
+{% endfor %}
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6"><div class="card"><div class="card-header">Open per eigenaar</div><table class="table table-sm mb-0">{% for r in by_owner %}<tr><td>{{ r.owner__name|default:"(geen eigenaar)" }}</td><td class="text-end">{{ r.n }}</td></tr>{% endfor %}</table></div></div>
+  <div class="col-md-6"><div class="card"><div class="card-header">Recent afgerond</div><ul class="list-group list-group-flush">{% for a in recently_done %}<li class="list-group-item small"><a href="{% url 'actions:action_detail' a.pk %}">{{ a.title }}</a> <span class="text-muted">{{ a.completed_at|date:"j M H:i" }}</span></li>{% empty %}<li class="list-group-item text-muted small">-</li>{% endfor %}</ul></div></div>
+</div>
+{% endblock %}

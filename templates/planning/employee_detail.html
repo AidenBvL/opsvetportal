@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ object }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3"><h3 class="mb-0">{{ object.name }}</h3><span class="text-muted ms-2">{{ object.job_title }}</span>
+  {% if perms.planning.change_employee %}<a class="btn btn-sm btn-primary ms-auto" href="{% url 'planning:employee_update' object.pk %}"><i class="bi bi-pencil"></i> Bewerken</a>{% endif %}</div>
+<div class="row g-3">
+<div class="col-md-4"><div class="card"><div class="card-header">Roosterinstellingen</div><div class="card-body small">
+  <dl class="row mb-0">
+    <dt class="col-6">Groepen</dt><dd class="col-6">{{ object.departments.all|join:", "|default:"-" }}</dd>
+    <dt class="col-6">Thuiswerkdagen/week</dt><dd class="col-6">{{ object.wfh_days_per_week }}</dd>
+    <dt class="col-6">Vrije dag(en)</dt><dd class="col-6">{{ object.days_off_label }}</dd>
+    <dt class="col-6">Dienstenpool</dt><dd class="col-6">{{ object.in_shift_pool|yesno:"ja,nee" }}</dd>
+    <dt class="col-6">Nooit dienst op</dt><dd class="col-6">{{ object.no_shift_label }}</dd>
+  </dl>
+  <hr>
+  <div class="fw-semibold">Agenda-abonnement (Outlook / Google / iPhone)</div>
+  <input class="form-control form-control-sm mt-1" readonly value="{{ ics_url }}" onclick="this.select()">
+  <div class="form-text">Voeg deze link toe als "agenda via internet"; diensten en thuiswerkdagen verschijnen dan automatisch.</div>
+</div></div></div>
+<div class="col-md-4"><div class="card"><div class="card-header">Komende diensten</div><ul class="list-group list-group-flush">
+  {% for s in upcoming_shifts %}<li class="list-group-item">{{ s.date|date:"l j F" }} · {{ s.get_shift_type_display }}{% if s.linked_to_wfh %} <span class="badge text-bg-success">thuis</span>{% endif %}</li>{% empty %}<li class="list-group-item text-muted">Geen.</li>{% endfor %}</ul></div></div>
+<div class="col-md-4"><div class="card mb-3"><div class="card-header">Komende thuiswerkdagen</div><ul class="list-group list-group-flush">
+  {% for w in upcoming_wfh %}<li class="list-group-item">{{ w.date|date:"l j F" }}</li>{% empty %}<li class="list-group-item text-muted">Geen.</li>{% endfor %}</ul></div>
+  <div class="card"><div class="card-header d-flex">Afwezigheid{% if perms.planning.add_absence %}<a class="ms-auto small" href="{% url 'planning:absence_create' %}?employee={{ object.pk }}">+ toevoegen</a>{% endif %}</div><ul class="list-group list-group-flush">
+  {% for a in absences %}<li class="list-group-item">{{ a }}</li>{% empty %}<li class="list-group-item text-muted">Geen.</li>{% endfor %}</ul></div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% load static %}<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}OPS/VET Portaal{% endblock %} · Cory Brothers</title>
+  <link href="{% static 'vendor/bootstrap/bootstrap.min.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
+  <link href="{% static 'css/portal.css' %}" rel="stylesheet">
+</head>
+<body>
+{% if user.is_authenticated %}
+<nav class="navbar navbar-dark bg-portal sticky-top px-3 py-2">
+  <button class="btn btn-sm btn-outline-light d-lg-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar"><i class="bi bi-list"></i></button>
+  <a class="navbar-brand fw-semibold" href="{% url 'dashboard' %}"><i class="bi bi-box-seam"></i> OPS/VET Portaal</a>
+  <form class="d-none d-md-flex flex-grow-1 mx-4" action="{% url 'shipments:search' %}" method="get" role="search">
+    <input class="form-control form-control-sm" type="search" name="q" placeholder="Zoek container, referentie, B/L, CHED of klant…" value="{{ request.GET.q|default:'' }}">
+  </form>
+  <div class="dropdown">
+    <a class="text-white text-decoration-none dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> {{ user.get_full_name|default:user.username }}</a>
+    <ul class="dropdown-menu dropdown-menu-end">
+      {% if user.employee %}<li><a class="dropdown-item" href="{% url 'planning:employee_detail' user.employee.pk %}">Mijn rooster</a></li>{% endif %}
+      <li><a class="dropdown-item" href="{% url 'password_change' %}">Wachtwoord wijzigen</a></li>
+      {% if user.is_superuser %}<li><a class="dropdown-item" href="{% url 'admin:index' %}">Django admin</a></li>{% endif %}
+      <li><hr class="dropdown-divider"></li>
+      <li><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="dropdown-item">Uitloggen</button></form></li>
+    </ul>
+  </div>
+</nav>
+<div class="container-fluid">
+  <div class="row">
+    <aside class="col-lg-2 p-0 sidebar offcanvas-lg offcanvas-start" id="sidebar" tabindex="-1">
+      <div class="p-3">
+        {% for section in nav_sections %}
+          <div class="nav-section">{{ section.title }}</div>
+          <ul class="nav flex-column mb-2">
+            {% for item in section.items %}
+              {% url item.url_name as item_url %}
+              <li class="nav-item"><a class="nav-link{% if request.path == item_url or item_url != '/' and item_url in request.path %} active{% endif %}" href="{{ item_url }}"><i class="bi bi-{{ item.icon }}"></i> {{ item.label }}</a></li>
+            {% endfor %}
+          </ul>
+        {% endfor %}
+      </div>
+    </aside>
+    <main class="col-lg-10 py-3 px-lg-4">
+      {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show py-2" role="alert">
+          {{ message }}<button type="button" class="btn-close py-2" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% else %}
+  {% block anonymous %}{% endblock %}
+{% endif %}
+<script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

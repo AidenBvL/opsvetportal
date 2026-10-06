@@ -1,0 +1,14 @@
+{% extends "core/generic_list.html" %}{% load portal %}
+{% block list_actions %}
+<ul class="nav nav-pills ms-3">{% for key, label in "open:Open,alle:Alle"|split_pairs %}<li class="nav-item"><a class="nav-link py-1{% if view == key %} active{% endif %}" href="?weergave={{ key }}">{{ label }}</a></li>{% endfor %}</ul>
+{% endblock %}
+{% block extra_filters %}<input type="hidden" name="weergave" value="{{ view }}">{% endblock %}
+{% block thead %}<th>Referentie</th><th>Klant</th><th>Richting</th><th>Vervoerder</th><th>Container</th><th>Laden</th><th>Lossen</th><th>Keurpunt</th><th>Keuring</th><th>Status</th>{% endblock %}
+{% block row %}
+<td><a class="fw-semibold" href="{% url 'shipments:road_detail' obj.pk %}">{{ obj.cory_reference|default:obj.customer_reference|default:obj.pk }}</a></td>
+<td>{{ obj.customer }}</td><td>{{ obj.get_direction_display }}</td><td>{{ obj.carrier|default:"-" }}{% if obj.truck_plate %}<div class="small text-muted">{{ obj.truck_plate }} {{ obj.trailer_plate }}</div>{% endif %}</td>
+<td>{% if obj.sea_shipment %}<a href="{% url 'shipments:sea_detail' obj.sea_shipment.pk %}">{{ obj.sea_shipment.container_number }}</a>{% else %}-{% endif %}</td>
+<td>{{ obj.loading_at|date:"D j/n H:i"|default:"-" }}<div class="small text-muted">{{ obj.loading_place }}</div></td>
+<td>{{ obj.delivery_planned_at|date:"D j/n H:i"|default:"-" }}<div class="small text-muted">{{ obj.unloading_place }}</div></td>
+<td>{{ obj.inspection_point|default:"-" }}</td><td>{% badge obj.inspection_status obj.get_inspection_status_display %}</td><td>{% badge obj.status obj.get_status_display %}</td>
+{% endblock %}

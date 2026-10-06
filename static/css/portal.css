@@ -1,0 +1,33 @@
+:root { --portal: #0b3954; --portal-accent: #087e8b; }
+body { background: #f4f6f9; font-size: .925rem; }
+.bg-portal { background: var(--portal); }
+.sidebar { background: #fff; border-right: 1px solid #e3e6ea; min-height: calc(100vh - 56px); }
+.sidebar .nav-link { color: #344; padding: .3rem .6rem; border-radius: .35rem; }
+.sidebar .nav-link:hover { background: #eef3f6; }
+.sidebar .nav-link.active { background: var(--portal-accent); color: #fff; }
+.nav-section { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: #8a96a3; margin: .8rem .6rem .2rem; }
+.card { border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+.card-header { background: #fff; font-weight: 600; }
+.stat { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+.table-sm td, .table-sm th { vertical-align: middle; }
+.cal-day { min-height: 110px; font-size: .8rem; }
+.cal-day.out { background: #f8f9fa; color: #aaa; }
+.cal-day.today { outline: 2px solid var(--portal-accent); outline-offset: -2px; }
+.cal-day .date { font-weight: 700; }
+.shift-pill { display: inline-block; padding: 1px 6px; border-radius: 10px; background: #fde2b5; margin-bottom: 2px; }
+.shift-pill.sat { background: #f7c6d0; }
+.shift-pill.linked { background: #c8e6c9; border: 1px solid #81c784; }
+.wfh-pill { display: inline-block; padding: 0 5px; border-radius: 8px; background: #d6eaf8; margin: 1px 1px 0 0; }
+.matrix td, .matrix th { text-align: center; padding: 2px 3px !important; font-size: .75rem; min-width: 26px; }
+.matrix td.name { text-align: left; white-space: nowrap; }
+.matrix td.code-T { --bs-table-bg: #c6efce; } .matrix td.code-V { --bs-table-bg: #d9d9d9; } .matrix td.code-D { --bs-table-bg: #fde2b5; }
+.matrix td.code-Z { --bs-table-bg: #f7c6d0; } .matrix td.code-A { --bs-table-bg: #e0d4f5; } .matrix td.code-F { --bs-table-bg: #eee; color: #999; }
+.matrix td.code-linked { --bs-table-bg: #9ad09d; font-weight: 700; }
+.matrix form button { border: 0; background: transparent; width: 100%; padding: 0; font-size: .75rem; }
+.kanban-col { min-height: 200px; }
+.vessel-changed { color: #b02a37; font-weight: 600; }
+.meeting-col .card-body { max-height: none; }
+.perm-matrix td { text-align: center; }
+.perm-matrix td:first-child { text-align: left; }
+@media print { .sidebar, .navbar, .btn, form { display: none !important; } main { width: 100% !important; } }
+.meeting-col .form-select, .meeting-col .form-control { font-size: .85rem; }

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>{{ kind_label }} {{ day|date:"l j F Y" }}</h3>
+<div class="card" style="max-width:560px"><div class="card-body">
+<p class="small text-muted">Huidige toewijzing: <strong>{{ shift.employee|default:"geen" }}</strong>{% if shift.is_manual %} (handmatig){% endif %}. Een handmatige wijziging blijft staan als het rooster opnieuw wordt gegenereerd; het portaal waarschuwt als een spelregel wordt overtreden.</p>
+<form method="post">{% csrf_token %}
+  {% include "core/_form_fields.html" with cols=12 %}
+  <button class="btn btn-primary">Opslaan</button>
+  {% if shift %}<button class="btn btn-outline-danger" name="delete" value="1" formnovalidate>Dienst verwijderen</button>{% endif %}
+  <a class="btn btn-outline-secondary" href="{% url 'planning:calendar' %}?jaar={{ day.year }}&maand={{ day.month }}">Annuleren</a>
+</form>
+</div></div>
+{% endblock %}

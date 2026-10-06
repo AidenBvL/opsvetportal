@@ -1,0 +1,95 @@
+{% extends "base.html" %}{% load portal %}
+{% block title %}Overleg {{ day|date:"j F" }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <a class="btn btn-sm btn-outline-secondary" href="?datum={{ prev_day|date:'Y-m-d' }}"><i class="bi bi-chevron-left"></i></a>
+  <h3 class="mb-0">Overleg {{ day|date:"l j F Y" }}</h3>
+  <a class="btn btn-sm btn-outline-secondary" href="?datum={{ next_day|date:'Y-m-d' }}"><i class="bi bi-chevron-right"></i></a>
+  {% if day != today %}<a class="btn btn-sm btn-link" href="?">vandaag</a>{% endif %}
+  <form class="ms-2"><input type="date" class="form-control form-control-sm" name="datum" value="{{ day|date:'Y-m-d' }}" onchange="this.form.submit()"></form>
+  <div class="ms-auto small text-muted">
+    {% if shift %}<i class="bi bi-moon-stars"></i> {{ shift.get_shift_type_display }}: <strong>{{ shift.employee }}</strong> · {% endif %}
+    <i class="bi bi-house"></i> Thuis: {% for w in wfh %}{{ w.employee.first_name }}{% if not forloop.last %}, {% endif %}{% empty %}niemand{% endfor %}
+    · <a href="{% url 'meetings:open_items' %}">alle open punten</a>
+  </div>
+</div>
+
+<div class="row g-3">
+{% for block in blocks %}
+<div class="col-xl-4 meeting-col" id="{{ block.key }}">
+  <div class="card h-100">
+    <div class="card-header d-flex align-items-center">
+      <i class="bi bi-{% if block.key == 'ochtend' %}sunrise{% elif block.key == 'middag' %}sun{% else %}sunset{% endif %} me-2"></i>{{ block.label }}
+      <span class="badge text-bg-light ms-auto">{{ block.items|length }}</span>
+    </div>
+    <div class="card-body">
+      {% for item in block.items %}
+      <div class="border rounded p-2 mb-2 {% if item.status == 'open' %}border-primary-subtle{% else %}bg-light{% endif %}">
+        <div class="d-flex">
+          <div class="fw-semibold{% if item.status != 'open' %} text-decoration-line-through text-muted{% endif %}">{{ item.title }}</div>
+          <div class="ms-auto">{% badge item.status item.get_status_display %}</div>
+        </div>
+        {% if item.details %}<div class="small" style="white-space:pre-wrap">{{ item.details }}</div>{% endif %}
+        <div class="small text-muted">
+          {% if item.raised_by %}<i class="bi bi-person"></i> {{ item.raised_by.first_name }}{% endif %}
+          {% if item.colleagues.all %}→ {% for c in item.colleagues.all %}<span class="badge text-bg-info text-dark">{{ c.first_name }}</span> {% endfor %}{% endif %}
+          {% if item.customer %}<i class="bi bi-building"></i> <a href="{% url 'core:customer_detail' item.customer.pk %}">{{ item.customer }}</a>{% endif %}
+          {% if item.sea_shipment %}<i class="bi bi-box"></i> <a href="{% url 'shipments:sea_detail' item.sea_shipment.pk %}">{{ item.sea_shipment.container_number }}</a>{% endif %}
+          {% if item.carried_from %}<i class="bi bi-arrow-return-right"></i> doorgeschoven{% endif %}
+          {% for a in item.actions.all %}<a href="{% url 'actions:action_detail' a.pk %}" class="badge text-bg-warning text-dark">{{ a.get_kind_display }}</a>{% endfor %}
+        </div>
+        {% if item.answer %}<div class="small mt-1 p-1 bg-success-subtle rounded"><i class="bi bi-chat-left-text"></i> {{ item.answer }}</div>{% endif %}
+        {% if perms.meetings.change_meetingitem %}
+        <form method="post" action="{% url 'meetings:item_action' item.pk %}" class="mt-1 d-flex flex-wrap gap-1">{% csrf_token %}
+          {% if item.status == 'open' %}
+            <input name="answer" class="form-control form-control-sm" style="flex:1 1 160px" placeholder="Antwoord / besluit">
+            <button class="btn btn-sm btn-success" name="action" value="answered" title="Beantwoord"><i class="bi bi-check2"></i></button>
+            <button class="btn btn-sm btn-outline-secondary" name="action" value="carry" title="Doorschuiven naar volgend overleg"><i class="bi bi-skip-forward"></i></button>
+            {% if perms.actions.add_action %}
+            <button class="btn btn-sm btn-outline-warning" name="action" value="to_action" title="Maak actie"><i class="bi bi-check2-square"></i></button>
+            <button class="btn btn-sm btn-outline-danger" name="action" value="to_escalation" title="Escaleer"><i class="bi bi-exclamation-triangle"></i></button>
+            {% endif %}
+          {% else %}
+            <button class="btn btn-sm btn-link p-0" name="action" value="reopen">heropenen</button>
+          {% endif %}
+          <a class="btn btn-sm btn-link p-0 ms-auto" href="{% url 'meetings:item_update' item.pk %}">bewerken</a>
+        </form>
+        {% endif %}
+      </div>
+      {% empty %}
+      <p class="text-muted small">Nog geen punten.</p>
+      {% endfor %}
+
+      {% if can_add %}
+      <form method="post" action="{% url 'meetings:add_item' %}" class="border-top pt-2 mt-2">{% csrf_token %}
+        <input type="hidden" name="datum" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="block" value="{{ block.key }}">
+        <input class="form-control form-control-sm mb-1" name="{{ block.key }}-title" placeholder="Nieuwe vraag / onderwerp…" required>
+        <div class="row g-1">
+          <div class="col-6"><label class="small text-muted">Ingebracht door</label>{{ block.form.raised_by|bs }}</div>
+          <div class="col-6"><label class="small text-muted">Klant</label>{{ block.form.customer|bs }}</div>
+          <div class="col-12"><label class="small text-muted">Koppel collega's (ctrl/cmd voor meerdere)</label>{{ block.form.colleagues|bs }}</div>
+        </div>
+        <button class="btn btn-sm btn-primary mt-1"><i class="bi bi-plus"></i> Toevoegen</button>
+      </form>
+      {% endif %}
+
+      <details class="mt-3">
+        <summary class="small text-muted">Aanwezigen & notities{% if block.obj.attendees.all %} ({{ block.obj.attendees.all|length }}){% endif %}</summary>
+        <form method="post" action="{% url 'meetings:save_block' %}" class="mt-2">{% csrf_token %}
+          <input type="hidden" name="datum" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="block" value="{{ block.key }}">
+          <div class="small">{% for choice in block.block_form.attendees %}<div class="form-check form-check-inline">{{ choice.tag }} <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label></div>{% endfor %}</div>
+          {{ block.block_form.notes|bs }}
+          {% if perms.meetings.change_meetingblock %}<button class="btn btn-sm btn-outline-primary mt-1">Opslaan</button>{% endif %}
+        </form>
+      </details>
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div>
+
+{% if open_elsewhere %}
+<div class="card mt-3"><div class="card-header">Nog open uit eerdere overleggen</div>
+<ul class="list-group list-group-flush">{% for item in open_elsewhere %}<li class="list-group-item small"><a href="?datum={{ item.meeting.date|date:'Y-m-d' }}#{{ item.meeting.block }}">{{ item.meeting }}</a>: {{ item.title }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% endblock %}

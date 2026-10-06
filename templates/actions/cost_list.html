@@ -1,0 +1,17 @@
+{% extends "core/generic_list.html" %}{% load portal %}
+{% block list_actions %}<a class="btn btn-sm btn-outline-secondary ms-3" href="{% querystring_with export='csv' %}"><i class="bi bi-filetype-csv"></i> Export CSV</a>{% endblock %}
+{% block list_header %}
+<div class="row g-3 mb-3">
+  <div class="col-lg-8"><div class="card p-3"><div class="d-flex mb-2"><span class="small text-muted">Totaal per verantwoordelijke (huidige selectie)</span><span class="ms-auto fw-bold">{{ grand_total|euro }}</span></div>{% include "core/_cost_totals.html" %}</div></div>
+  <div class="col-lg-4"><div class="card"><div class="card-header small">Top klanten</div><table class="table table-sm mb-0">{% for r in by_customer %}<tr><td>{{ r.customer__name|default:"(geen klant)" }}</td><td class="text-end">{{ r.total|euro }}</td></tr>{% endfor %}</table></div></div>
+</div>
+{% endblock %}
+{% block extra_filters %}
+<div class="col-md-2"><input type="date" class="form-control form-control-sm" name="van" value="{{ request.GET.van }}" title="Vanaf"></div>
+<div class="col-md-2"><input type="date" class="form-control form-control-sm" name="tot" value="{{ request.GET.tot }}" title="Tot en met"></div>
+{% endblock %}
+{% block row %}
+<td>{{ obj.cost_date|date:"d-m-Y" }}</td><td>{% if obj.action %}<a href="{% url 'actions:action_detail' obj.action.pk %}">{{ obj.description }}</a>{% else %}{{ obj.description }}{% endif %}</td>
+<td>{{ obj.get_cost_type_display }}</td><td>{{ obj.customer|default:"-" }}</td><td>{% if obj.sea_shipment %}<a href="{% url 'shipments:sea_detail' obj.sea_shipment.pk %}">{{ obj.sea_shipment.container_number }}</a>{% else %}-{% endif %}</td>
+<td class="text-end">{{ obj.amount|euro }}</td><td>{% badge obj.responsibility obj.get_responsibility_display %}</td><td>{{ obj.get_status_display }}</td>
+{% endblock %}

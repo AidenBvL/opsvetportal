@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% load portal %}
+{% block title %}{{ object }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h3 class="mb-0">{{ object.name }}</h3>{% if not object.active %}<span class="badge text-bg-secondary ms-2">inactief</span>{% endif %}
+  <div class="ms-auto">
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'shipments:seashipment_create' %}?customer={{ object.pk }}"><i class="bi bi-plus"></i> Zeecontainer</a>
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'shipments:sea_bulk' %}?customer={{ object.pk }}"><i class="bi bi-plus"></i> Meerdere containers</a>
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'shipments:roadtransport_create' %}?customer={{ object.pk }}"><i class="bi bi-plus"></i> Wegtransport</a>
+    <a class="btn btn-sm btn-outline-danger" href="{% url 'actions:action_create' %}?customer={{ object.pk }}"><i class="bi bi-plus"></i> Actie</a>
+    <a class="btn btn-sm btn-primary" href="{% url 'core:customer_update' object.pk %}"><i class="bi bi-pencil"></i> Bewerken</a>
+  </div>
+</div>
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card mb-3"><div class="card-header">Klantgegevens</div><div class="card-body">
+      <dl class="row mb-0 small">
+        <dt class="col-5">Klantcode</dt><dd class="col-7">{{ object.code|default:"-" }}</dd>
+        <dt class="col-5">Nationaliteit</dt><dd class="col-7">{{ object.nationality|default:"-" }}</dd>
+        <dt class="col-5">Adres</dt><dd class="col-7">{{ object.address|default:"-" }}</dd>
+        <dt class="col-5">Btw / EORI</dt><dd class="col-7">{{ object.vat_number|default:"-" }} / {{ object.eori_number|default:"-" }}</dd>
+        <dt class="col-5">Contact</dt><dd class="col-7">{{ object.contact_name|default:"-" }}<br>{% if object.email %}<a href="mailto:{{ object.email }}">{{ object.email }}</a><br>{% endif %}{{ object.phone }}</dd>
+        <dt class="col-5">Accountmanager</dt><dd class="col-7">{{ object.account_manager|default:"-" }}</dd>
+      </dl>
+      {% if object.notes %}<hr><div class="small" style="white-space:pre-wrap">{{ object.notes }}</div>{% endif %}
+    </div></div>
+    <div class="card mb-3"><div class="card-header">Extra kosten (totaal)</div><div class="card-body">{% include "core/_cost_totals.html" %}</div></div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card mb-3"><div class="card-header">Inkomende zeecontainers ({{ sea_open|length }} open, {{ sea_closed_count }} afgerond)</div>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+      <thead class="table-light"><tr><th>Container</th><th>Klantref.</th><th>Cory ref.</th><th>Rederij</th><th>Schip</th><th>ETA</th><th>Keurpunt</th><th>Keuring</th></tr></thead>
+      {% for s in sea_open %}<tr><td><a href="{% url 'shipments:sea_detail' s.pk %}">{{ s.container_number }}</a></td><td>{{ s.customer_reference }}</td><td>{{ s.cory_reference }}</td><td>{{ s.shipping_line|default:"-" }}</td>
+        <td{% if s.vessel_changed %} class="vessel-changed"{% endif %}>{{ s.vessel_name|default:"-" }}</td><td>{{ s.eta|date:"j/n H:i"|default:"-" }}</td><td>{{ s.inspection_point|default:"-" }}</td><td>{% badge s.inspection_status s.get_inspection_status_display %}</td></tr>
+      {% empty %}<tr><td colspan="8" class="text-muted text-center">Geen open containers.</td></tr>{% endfor %}
+      </table></div></div>
+    <div class="card mb-3"><div class="card-header">Wegtransporten</div>
+      <table class="table table-sm mb-0">{% for r in road_open %}<tr><td><a href="{% url 'shipments:road_detail' r.pk %}">{{ r.cory_reference|default:r.pk }}</a></td><td>{{ r.carrier|default:"-" }}</td><td>{{ r.loading_at|date:"j/n H:i" }}</td><td>{{ r.unloading_place }}</td><td>{% badge r.status r.get_status_display %}</td></tr>
+      {% empty %}<tr><td class="text-muted text-center">Geen open transporten.</td></tr>{% endfor %}</table></div>
+    <div class="card mb-3"><div class="card-header">Open acties & escalaties</div>
+      <ul class="list-group list-group-flush">{% for a in actions %}<li class="list-group-item"><a href="{% url 'actions:action_detail' a.pk %}">{{ a.title }}</a> {% badge a.kind a.get_kind_display %} {{ a|priority_badge }} <span class="small text-muted">{{ a.owner|default:"" }}</span></li>{% empty %}<li class="list-group-item text-muted">Geen open acties.</li>{% endfor %}</ul></div>
+    <div class="card mb-3"><div class="card-header">Documenten</div>
+      <ul class="list-group list-group-flush">{% for d in documents %}<li class="list-group-item"><a href="{% url 'documents:document_detail' d.pk %}">{{ d }}</a> <span class="small text-muted">{{ d.get_doc_type_display }} · {{ d.created_at|date:"j M" }}</span></li>{% empty %}<li class="list-group-item text-muted">Geen documenten.</li>{% endfor %}</ul></div>
+  </div>
+</div>
+{% endblock %}

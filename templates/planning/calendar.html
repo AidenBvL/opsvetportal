@@ -1,0 +1,88 @@
+{% extends "base.html" %}{% load portal %}
+{% block title %}Agenda {{ month_name }} {{ year }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <a class="btn btn-sm btn-outline-secondary" href="?jaar={{ prev.jaar }}&maand={{ prev.maand }}"><i class="bi bi-chevron-left"></i></a>
+  <h3 class="mb-0 text-capitalize">{{ month_name }} {{ year }}</h3>
+  <a class="btn btn-sm btn-outline-secondary" href="?jaar={{ next.jaar }}&maand={{ next.maand }}"><i class="bi bi-chevron-right"></i></a>
+  {% if roster %}<span class="badge text-bg-{% if roster.status == 'definitief' %}success{% else %}warning{% endif %}">{{ roster.get_status_display }}</span>
+    {% if roster.generated_at %}<span class="small text-muted">gegenereerd {{ roster.generated_at|date:"j M H:i" }}</span>{% endif %}
+  {% else %}<span class="badge text-bg-light text-dark">nog niet gegenereerd</span>{% endif %}
+  <div class="ms-auto d-flex gap-2">
+    {% if can_generate %}
+    <form method="post" action="{% url 'planning:generate' %}" onsubmit="return confirm('Automatisch gegenereerde thuiswerkdagen en diensten in deze maand worden opnieuw berekend. Handmatige wijzigingen blijven staan. Doorgaan?')">{% csrf_token %}
+      <input type="hidden" name="jaar" value="{{ year }}"><input type="hidden" name="maand" value="{{ month }}">
+      <button class="btn btn-sm btn-primary"{% if roster.status == 'definitief' %} disabled title="Rooster is definitief"{% endif %}><i class="bi bi-magic"></i> Genereer rooster</button>
+    </form>
+    <form method="post" action="{% url 'planning:set_status' %}">{% csrf_token %}
+      <input type="hidden" name="jaar" value="{{ year }}"><input type="hidden" name="maand" value="{{ month }}">
+      {% if roster.status == 'definitief' %}<input type="hidden" name="status" value="concept"><button class="btn btn-sm btn-outline-warning"><i class="bi bi-unlock"></i> Terug naar concept</button>
+      {% else %}<input type="hidden" name="status" value="definitief"><button class="btn btn-sm btn-outline-success"{% if not roster %} disabled{% endif %}><i class="bi bi-lock"></i> Vaststellen</button>{% endif %}
+    </form>
+    {% endif %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'planning:export' %}?jaar={{ year }}&maand={{ month }}"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+    <button class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i></button>
+  </div>
+</div>
+
+{% if warnings %}<div class="alert alert-warning py-2 small"><strong>Meldingen van de generator:</strong><ul class="mb-0">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
+
+<div class="card mb-3"><div class="table-responsive">
+<table class="table table-bordered mb-0">
+  <thead class="table-light"><tr><th style="width:40px">wk</th>{% for d in weekday_short|slice:":6" %}<th>{{ d }}</th>{% endfor %}</tr></thead>
+  {% for week in weeks %}
+  <tr><td class="text-muted small">{{ week.number }}</td>
+    {% for day in week.days %}
+    <td class="cal-day{% if not day.in_month %} out{% endif %}{% if day.is_today %} today{% endif %}">
+      <div class="d-flex"><span class="date">{{ day.date.day }}</span>
+        {% if can_edit and day.in_month and not day.holiday %}<a class="ms-auto small" href="{% url 'planning:shift_edit' day.date|date:'Y-m-d' %}" title="Dienst wijzigen"><i class="bi bi-pencil-square"></i></a>{% endif %}</div>
+      {% if day.holiday %}<div class="small text-muted fst-italic">{{ day.holiday }}</div>{% endif %}
+      {% if day.shift %}<div><span class="shift-pill{% if day.shift.shift_type == 'zaterdag' %} sat{% endif %}{% if day.shift.linked_to_wfh %} linked{% endif %}" title="{{ day.shift.get_shift_type_display }}{% if day.shift.linked_to_wfh %} (gekoppeld aan thuiswerk){% endif %}{% if day.shift.is_manual %} - handmatig{% endif %}">
+        <i class="bi bi-{% if day.shift.shift_type == 'zaterdag' %}sun{% else %}moon-stars{% endif %}"></i> {{ day.shift.employee.first_name }}{% if day.shift.is_manual %}*{% endif %}</span></div>{% endif %}
+      {% for w in day.wfh %}<span class="wfh-pill" title="Thuiswerkdag"><i class="bi bi-house"></i> {{ w.employee.first_name }}</span>{% endfor %}
+    </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div></div>
+<div class="small mb-4">
+  <span class="shift-pill"><i class="bi bi-moon-stars"></i> avonddienst</span>
+  <span class="shift-pill sat"><i class="bi bi-sun"></i> zaterdagdienst</span>
+  <span class="shift-pill linked">dienst + thuiswerk</span>
+  <span class="wfh-pill"><i class="bi bi-house"></i> thuiswerk</span>
+  <span class="text-muted">* = handmatig aangepast (blijft staan bij hergenereren)</span>
+</div>
+
+<h5 id="matrix">Overzicht per medewerker</h5>
+<p class="small text-muted mb-2">T = thuiswerk, D = avonddienst, Z = zaterdagdienst, V = vrije dag, A = afwezig, F = feestdag. {% if perms.planning.change_workfromhomeday %}Klik op een cel om een thuiswerkdag aan/uit te zetten.{% endif %}</p>
+<div class="card mb-3"><div class="table-responsive">
+<table class="table table-bordered table-sm matrix mb-0">
+  <thead class="table-light"><tr><th class="text-start">Naam</th>{% for d in workdays %}<th class="{% if d.weekday == 5 %}table-secondary{% endif %}">{{ weekday_short|get_item_index:d.weekday }}<br>{{ d.day }}</th>{% endfor %}<th>T</th><th>D</th><th>Z</th></tr></thead>
+  {% for row in matrix %}
+  <tr><td class="name"><a href="{% url 'planning:employee_detail' row.employee.pk %}">{{ row.employee.name }}</a></td>
+    {% for c in row.cells %}
+      <td class="{% for code, kind in c.codes %}code-{{ code }} {% endfor %}{% if c.linked %}code-linked{% endif %}">
+      {% if perms.planning.change_workfromhomeday and c.date.weekday < 5 %}
+        <form method="post" action="{% url 'planning:toggle_wfh' %}">{% csrf_token %}<input type="hidden" name="employee" value="{{ row.employee.pk }}"><input type="hidden" name="date" value="{{ c.date|date:'Y-m-d' }}"><button>{% for code, kind in c.codes %}{{ code }}{% endfor %}&nbsp;</button></form>
+      {% else %}{% for code, kind in c.codes %}{{ code }}{% endfor %}{% endif %}
+      </td>
+    {% endfor %}
+    <td>{{ row.counts.wfh }}</td><td>{{ row.counts.avond }}</td><td>{{ row.counts.zaterdag }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div></div>
+
+<div class="card"><div class="card-body small">
+  <strong>Spelregels generator</strong>
+  <ul class="mb-0">
+    <li>Iedere deelnemer krijgt het ingestelde aantal thuiswerkdagen per week; groepsgenoten nooit op dezelfde of de direct volgende dag.</li>
+    <li>Vaste vrije dagen en afwezigheid tellen nooit als thuiswerk- of dienstdag; feestdagen worden overgeslagen.</li>
+    <li>1 persoon per dienst, nooit twee dagen achter elkaar; wie zaterdag draait heeft die werkweek geen avonddienst.</li>
+    <li>Persoonlijke uitsluitingen (bijv. Aiden nooit op maandag) worden altijd gerespecteerd.</li>
+    <li>Thuiswerkers krijgen waar mogelijk die dag de avonddienst; verdeling is eerlijk en rouleert over de weekdagen.</li>
+  </ul>
+  Instellingen per persoon pas je aan bij <a href="{% url 'planning:employee_list' %}">Medewerkers</a>.
+</div></div>
+{% endblock %}
