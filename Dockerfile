@@ -9,7 +9,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-RUN DJANGO_DEBUG=1 python manage.py collectstatic --noinput
+# Verzamel de statische bestanden met dezelfde (productie)instellingen als de live server,
+# anders ontbreekt het manifest van whitenoise. De sleutel hier is alleen voor het bouwen.
+RUN DJANGO_DEBUG=0 DJANGO_SECRET_KEY=build-only-not-secret python manage.py collectstatic --noinput
 
 ENV DJANGO_DEBUG=0
 EXPOSE 8000
