@@ -59,8 +59,12 @@ class SeaShipment(TimeStampedModel):
     original_vessel_name = models.CharField("oorspronkelijk zeeschip", max_length=150, blank=True)
     vessel_changed = models.BooleanField("van schip gewisseld", default=False)
     vessel_changed_at = models.DateTimeField("schipwissel gedetecteerd op", null=True, blank=True)
-    port_of_loading = models.CharField("laadhaven (POL)", max_length=100, blank=True)
-    port_of_discharge = models.CharField("loshaven (POD)", max_length=100, default="NLRTM", help_text="UN/LOCODE, bijv. NLRTM.")
+    port_of_loading = models.CharField(
+        "laadhaven (POL)", max_length=100, blank=True, help_text="UN/LOCODE of havennaam; bekende havens worden omgezet naar de code."
+    )
+    port_of_discharge = models.CharField(
+        "loshaven (POD)", max_length=100, default="NLRTM", help_text="UN/LOCODE of havennaam, bijv. NLRTM of Rotterdam."
+    )
     terminal = models.CharField("terminal", max_length=100, blank=True)
 
     departed_at = models.DateTimeField("vertrokken uit laadhaven (ATD)", null=True, blank=True)
@@ -82,8 +86,9 @@ class SeaShipment(TimeStampedModel):
 
     goods_description = models.CharField("goederenomschrijving", max_length=250, blank=True)
     temperature_setpoint = models.DecimalField("temperatuur setpoint (°C)", max_digits=5, decimal_places=1, null=True, blank=True)
-    gross_weight_kg = models.DecimalField("brutogewicht (kg)", max_digits=10, decimal_places=1, null=True, blank=True)
+    gross_weight_kg = models.DecimalField("brutogewicht (kg)", max_digits=12, decimal_places=3, null=True, blank=True)
     packages = models.PositiveIntegerField("colli", null=True, blank=True)
+    package_type = models.CharField("verpakking", max_length=40, blank=True, help_text="Bijv. CARTONS, PALLETS.")
 
     status = models.CharField("status", max_length=20, choices=STATUS_CHOICES, default="verwacht")
     handler = models.ForeignKey(
@@ -108,7 +113,11 @@ class SeaShipment(TimeStampedModel):
         return f"{self.container_number} ({ref})" if ref else self.container_number
 
     def save(self, *args, **kwargs):
+        from core.ports import port_code
+
         self.container_number = normalize_container_number(self.container_number)
+        self.port_of_loading = port_code(self.port_of_loading)
+        self.port_of_discharge = port_code(self.port_of_discharge) or "NLRTM"
         if self.vessel_name and not self.original_vessel_name:
             self.original_vessel_name = self.vessel_name
         if self.eta and not self.eta_original:
@@ -234,7 +243,7 @@ class RoadTransport(TimeStampedModel):
     goods_description = models.CharField("goederenomschrijving", max_length=250, blank=True)
     temperature_setpoint = models.DecimalField("temperatuur (°C)", max_digits=5, decimal_places=1, null=True, blank=True)
     pallets = models.PositiveIntegerField("pallets", null=True, blank=True)
-    gross_weight_kg = models.DecimalField("brutogewicht (kg)", max_digits=10, decimal_places=1, null=True, blank=True)
+    gross_weight_kg = models.DecimalField("brutogewicht (kg)", max_digits=12, decimal_places=3, null=True, blank=True)
 
     status = models.CharField("status", max_length=20, choices=STATUS_CHOICES, default="gepland")
     handler = models.ForeignKey(

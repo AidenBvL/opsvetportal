@@ -100,6 +100,17 @@ def apply_result(shipment, result, now=None, provider_name=None):
         value = getattr(result, field, "")
         if value and not getattr(shipment, field):
             setattr(shipment, field, value)
+    if result.port_of_discharge:
+        from core.ports import port_code
+
+        pod = port_code(result.port_of_discharge)
+        if pod and pod != shipment.port_of_discharge:
+            messages.append(f"Loshaven: {pod}")
+            shipment.port_of_discharge = pod
+    if result.gate_out_at and shipment.status in SeaShipment.OPEN_STATUSES:
+        # De container is bij de terminal opgehaald: uitgeleverd.
+        shipment.status = "uitgeleverd"
+        messages.append(f"Container opgehaald (gate out) op {timezone.localtime(result.gate_out_at):%d-%m %H:%M}")
 
     if result.eta_original:
         # De eerste ETA van de rederij is leidend voor de berekende vertraging.

@@ -414,7 +414,7 @@ class SafecubeTests(TestCase):
         self.assertEqual(self.shipment.vessel_imo, "9783538")
         self.assertEqual(self.shipment.eta.isoformat(), "2026-11-03T07:00:00+00:00")
         self.assertIsNone(self.shipment.ata)
-        self.assertEqual(self.shipment.port_of_loading, "Qingdao")
+        self.assertEqual(self.shipment.port_of_loading, "CNQDG")  # de UN/LOCODE die Safecube meegeeft
         self.assertEqual(self.shipment.terminal, "ECT Euromax")
 
     def test_no_info_yet_is_pending_and_timeout(self):
@@ -463,7 +463,8 @@ class PasteAndQuickUpdateTests(TestCase):
         local = timezone.localtime(r.eta)
         self.assertEqual((local.day, local.month, local.hour), (3, 11, 8))
         self.assertEqual((r.vessel_name, r.voyage), ("COSCO SHIPPING GEMINI", "0FAO2E1MA"))
-        self.assertEqual(r.port_of_loading, "Qingdao")
+        self.assertEqual(r.port_of_loading, "QINGDAO (CN)")
+        self.assertEqual(r.port_of_discharge, "ROTTERDAM (NL)")
         self.assertEqual(r.terminal, "ECT EUROMAX ROTTERDAM")
         self.assertIsNone(r.ata)
         self.assertEqual(timezone.localtime(r.departed_at).day, 24)
@@ -474,11 +475,34 @@ class PasteAndQuickUpdateTests(TestCase):
         self.assertEqual(r.status_code, 302)
         self.shipment.refresh_from_db()
         self.assertEqual(self.shipment.voyage, "0FAO2E1MA")
+        self.assertEqual(self.shipment.port_of_loading, "CNTAO")
         self.assertEqual(self.shipment.terminal, "ECT EUROMAX ROTTERDAM")
         self.assertFalse(self.shipment.vessel_changed)
         self.assertIsNotNone(self.shipment.departed_at)
         self.assertEqual(self.shipment.tracking_updates.get().provider, "geplakt")
         self.assertIsNotNone(self.shipment.voyage_progress)
+
+    def test_paste_delivered_container(self):
+        """CMA CGM-pagina van een afgeronde reis: aankomst, lossen, gate out en havens worden overgenomen."""
+        from pathlib import Path
+
+        text = (Path(__file__).parent / "testdata" / "cma_cgm_tracking_delivered.txt").read_text()
+        self.shipment.vessel_name, self.shipment.port_of_loading = "MAERSK LONDRINA", "PARANAGUA"
+        self.shipment.save()
+        self.assertEqual(self.shipment.port_of_loading, "BRPNG")
+        with mock.patch("django.utils.timezone.now", return_value=timezone.make_aware(datetime(2026, 10, 6, 15, 0))):
+            self.client.post(f"/zendingen/zeevracht/{self.shipment.pk}/plakken/", {"text": text})
+        self.shipment.refresh_from_db()
+        local = lambda d: timezone.localtime(d).strftime("%d-%m %H:%M")  # noqa: E731
+        self.assertEqual(local(self.shipment.ata), "03-10 13:00")
+        self.assertEqual(local(self.shipment.discharged_at), "03-10 17:26")
+        self.assertEqual(local(self.shipment.departed_at), "11-09 22:33")
+        self.assertEqual((self.shipment.voyage, self.shipment.terminal), ("0EWORS1MA", "HUTCHISON PORT DELTA II"))
+        self.assertEqual((self.shipment.port_of_loading, self.shipment.port_of_discharge), ("BRPNG", "NLRTM"))
+        self.assertEqual(self.shipment.status, "uitgeleverd")
+        self.assertFalse(self.shipment.vessel_changed)
+        page = self.client.get(f"/zendingen/zeevracht/{self.shipment.pk}/")
+        self.assertContains(page, "Paranaguá (BRPNG)")
 
     def test_quick_update_and_detail_page(self):
         url = f"/zendingen/zeevracht/{self.shipment.pk}/"

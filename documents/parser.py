@@ -88,6 +88,11 @@ TEMPERATURE_PATTERN = (
     r"(?:TEMP(?:ERATURE|ERATUUR)?|SET\s*POINT)[^\d\-+]{0,40}?([\-+]?\d{1,2}(?:[.,]\d)?)\s*"
     r"(?:°\s*C\b|º\s*C\b|DEG(?:REES?|R)?\.?\s*(?:C(?:ELSIUS)?\b)?|C\b)"
 )
+PACKAGES_PATTERN = re.compile(
+    r"\b(\d{1,3}(?:[.,]\d{3})+|\d{1,6})\s*(CARTONS?|CTNS?|PACKAGES?|PKGS?|PALLETS?|PLTS?|BOX(?:ES)?|BAGS?|CASES?|COLLI|"
+    r"PIECES|PCS|BUNDLES?|DRUMS?|CRATES?|SACKS?|BALES?|BLOCKS?|UNITS?|DOZ(?:ENS)?)\b",
+    re.I,
+)
 GOODS_KEYWORDS = re.compile(r"\b(?:FROZEN|CHILLED|FRESH|DRIED|SALTED|SMOKED|DIEPGEVROREN|BEVROREN|GEKOELD|VERS)\b", re.I)
 
 
@@ -115,6 +120,31 @@ def parse_date(value):
     return None
 
 
+def parse_number(value):
+    """"22909.950" -> "22909.950", "24.580,00" -> "24580.00", "22,050" -> "22050". Leeg als het geen getal is."""
+    value = re.sub(r"[^\d.,]", "", value or "")
+    if not re.search(r"\d", value):
+        return ""
+    if "." in value and "," in value:
+        decimal = "." if value.rfind(".") > value.rfind(",") else ","
+        thousands = "," if decimal == "." else "."
+        value = value.replace(thousands, "").replace(decimal, ".")
+    elif value.count(".") + value.count(",") == 1:
+        head, tail = re.split(r"[.,]", value)
+        # 1-3 cijfers + precies 3 erachter is een duizendtal ("22.050"); "22909.950" is een decimaal getal.
+        value = head + tail if len(tail) == 3 and 0 < len(head) <= 3 else f"{head}.{tail}"
+    else:
+        value = re.sub(r"[.,]", "", value)
+    return value.strip(".")
+
+
+def _packages(fragment):
+    match = PACKAGES_PATTERN.search(fragment or "")
+    if not match:
+        return "", ""
+    return parse_number(match.group(1)), match.group(2).upper()
+
+
 def _container_type(fragment):
     match = CONTAINER_TYPE_PATTERN.search(fragment)
     if not match:
@@ -138,7 +168,16 @@ def find_containers(text):
         seen.add(number)
         fragment = upper[match.end() : match.end() + 80]
         seal = _first(r"(?:SEAL|ZEGEL)\s*(?:NO\.?|NR\.?|#)?\s*[:\-]?\s*([A-Z0-9]{5,15})", fragment)
-        containers.append({"container_number": number, "container_type": _container_type(fragment), "seal_number": seal})
+        item = {"container_number": number, "container_type": _container_type(fragment), "seal_number": seal}
+        # Op de regel van de container: "1 x 40RH 21 CARTONS 22909.950 4650 25.200" -> colli en brutogewicht.
+        line = fragment.split("\n", 1)[0]
+        packages = PACKAGES_PATTERN.search(line)
+        if packages:
+            item["packages"], item["package_type"] = parse_number(packages.group(1)), packages.group(2).upper()
+            weight = re.search(r"(\d[\d.,]*\d)\s*(?:KGS?\b)?", line[packages.end():])
+            if weight and parse_number(weight.group(1)):
+                item["gross_weight_kg"] = parse_number(weight.group(1))
+        containers.append(item)
     return containers
 
 
@@ -170,11 +209,17 @@ def extract_fields(text):
         "ched_number": _first(r"\b(CHED[PDA]?(?:PP)?\.[A-Z]{2}\.\d{4}\.\d{5,8})\b", text),
         "customer_reference": _first(r"(?:YOUR|CUSTOMER|KLANT)\s*REF(?:ERENCE|ERENTIE)?\.?\s*[:\-]\s*([A-Z0-9\-/]{3,40})", text),
         "temperature_setpoint": temperature.replace(",", "."),
-        "gross_weight_kg": weight,
+        "gross_weight_kg": parse_number(weight),
         "goods_description": _first(r"(?:DESCRIPTION\s+OF\s+GOODS|GOEDERENOMSCHRIJVING|COMMODITY)\s*[:\-]?\s*([^\n]{3,120})", text)
         or _goods_line(text),
         "departed_at": "",
     }
+    data["packages"], data["package_type"] = _packages(text)
+    if len(data["containers"]) == 1:
+        # Eén container: wat op de containerregel staat is het meest precies.
+        only = data["containers"][0]
+        for field in ("packages", "package_type", "gross_weight_kg"):
+            data[field] = only.get(field) or data[field]
     shipped = _first(r"SHIPPED\s+ON\s+BOARD[^\n]{0,60}?(\d{1,2}[\s\-/.][A-Z0-9]{2,9}[\s\-/.,]+\d{4})", text)
     if parse_date(shipped):
         data["departed_at"] = parse_date(shipped).isoformat()
@@ -184,21 +229,6 @@ def extract_fields(text):
 def _not_a_label(value):
     """Een kolomkop als "PORT OF DISCHARGE FINAL PLACE OF DELIVERY" is geen waarde."""
     return "" if re.search(r"\b(?:PORT|PLACE)\s+OF\b|\bVESSEL\b|\bDELIVERY\b", value, re.I) else value
-
-
-# Veelvoorkomende loshavens als UN/LOCODE (zo verwacht de tracking ze).
-PORT_LOCODES = {
-    "ROTTERDAM": "NLRTM", "AMSTERDAM": "NLAMS", "VLISSINGEN": "NLVLI", "FLUSHING": "NLVLI", "MOERDIJK": "NLMOE",
-    "ANTWERP": "BEANR", "ANTWERPEN": "BEANR", "ANTWERPEN-BRUGGE": "BEANR", "ZEEBRUGGE": "BEZEE",
-    "HAMBURG": "DEHAM", "BREMERHAVEN": "DEBRV", "LE HAVRE": "FRLEH",
-}  # fmt: skip
-
-
-def port_locode(name):
-    clean = re.sub(r"[,(].*$", "", (name or "").upper()).strip()
-    if re.fullmatch(r"[A-Z]{2}\s?[A-Z0-9]{3}", clean):
-        return clean.replace(" ", "")
-    return PORT_LOCODES.get(clean, "")
 
 
 def merge_layout(data, layout):
@@ -214,8 +244,10 @@ def merge_layout(data, layout):
     for field in ("consignee", "notify", "shipper"):
         if layout.get(field):
             data[field] = layout[field]
-    if data.get("port_of_discharge"):
-        data["port_of_discharge"] = port_locode(data["port_of_discharge"]) or data["port_of_discharge"]
+    from core.ports import port_code
+
+    for field in ("port_of_loading", "port_of_discharge"):
+        data[field] = port_code(data.get(field, ""))
     return data
 
 

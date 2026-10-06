@@ -62,6 +62,47 @@ def _line_after(lines, label):
     return ""
 
 
+DATE_LINE_RE = re.compile(r"^\s*(?:[A-Za-z]{3,9},?\s+)?\d{1,2}[-/ .](?:[A-Za-z]{3,9}|\d{1,2})[-/ .,]+\d{4}\s*$")
+TIME_LINE_RE = re.compile(r"^\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\s*$", re.I)
+PLANNED_RE = re.compile(r"planned|estimated|expected|scheduled|gepland|verwacht", re.I)
+
+
+def parse_events(lines):
+    """Bewegingen zoals CMA CGM ze toont: datum, tijd, omschrijving, plaats, terminal, (schip ( reis))."""
+    events, current = [], None
+    for line in lines:
+        if DATE_LINE_RE.match(line):
+            current = {"date_text": line.strip(), "lines": []}
+            events.append(current)
+        elif current is not None:
+            if TIME_LINE_RE.match(line) and not current["lines"]:
+                current["date_text"] += " " + line.strip()
+            else:
+                current["lines"].append(line.strip())
+    result = []
+    for event in events:
+        when = _find_date(event["date_text"])
+        body = [line for line in event["lines"] if line]
+        if when is None or not body:
+            continue
+        vessel = next((VESSEL_VOYAGE_RE.match(line) for line in body if VESSEL_VOYAGE_RE.match(line)), None)
+        places = [line for line in body[1:] if not VESSEL_VOYAGE_RE.match(line)]
+        result.append({
+            "when": when,
+            "what": body[0],
+            "location": places[0] if places else "",
+            "terminal": places[1] if len(places) > 1 else "",
+            "vessel": vessel.group("vessel").strip() if vessel else "",
+            "voyage": vessel.group("voyage") if vessel else "",
+            "planned": bool(PLANNED_RE.search(body[0])) or when > timezone.now(),
+        })
+    return result
+
+
+def _is(event, pattern):
+    return re.search(pattern, event["what"], re.I) is not None
+
+
 def parse_tracking_text(text):
     """Geeft een TrackingResult terug, of None als er niets bruikbaars in de tekst staat."""
     text = (text or "").replace("\r", "")
@@ -77,27 +118,13 @@ def parse_tracking_text(text):
             if eta:
                 break
 
-    # Schip + reis: "COSCO SHIPPING GEMINI ( 0FAO2E1MA)" -> de laatste is de aankomst in de loshaven.
+    events = parse_events(lines)
+    legs = [Leg(vessel_name=e["vessel"], voyage=e["voyage"], location=e["location"]) for e in events if e["vessel"]]
+    vessel_events = [e for e in events if e["vessel"]]
     vessel = voyage = terminal = ""
-    ata = None
-    matches = list(VESSEL_VOYAGE_RE.finditer(text))
-    legs = []
-    for match in matches:
-        legs.append(Leg(vessel_name=match.group("vessel").strip(), voyage=match.group("voyage")))
-    if matches:
-        last = matches[-1]
-        vessel, voyage = last.group("vessel").strip(), last.group("voyage")
-        before = text[: last.start()].rstrip("\n").split("\n")
-        block = [line.strip() for line in before[-5:] if line.strip()]
-        if block:
-            terminal = block[-1]
-        block_text = " ".join(block)
-        if re.search(r"arrival|arrived|aankomst", block_text, re.I) and not re.search(r"planned|estimated|expected|gepland", block_text, re.I):
-            ata = _find_date(block_text)
-            if ata and ata > timezone.now():
-                ata = None
-        if eta is None:
-            eta = _find_date(block_text)
+    if vessel_events:
+        last = vessel_events[-1]
+        vessel, voyage, terminal = last["vessel"], last["voyage"], last["terminal"]
     else:
         vessel = _line_after(lines, "VESSEL") or _line_after(lines, "OCEAN VESSEL")
         voyage = _line_after(lines, "VOYAGE")
@@ -105,18 +132,31 @@ def parse_tracking_text(text):
         if match:
             vessel, voyage = match.group(1), voyage or match.group(2)
 
-    departed = None
-    if matches:
-        first = matches[0]
-        block = " ".join(line.strip() for line in text[: first.start()].rstrip("\n").split("\n")[-5:])
-        if re.search(r"departure|departed|vertrek", block, re.I) and not re.search(r"planned|estimated|gepland", block, re.I):
-            departed = _find_date(block)
-            if departed and departed > timezone.now():
-                departed = None
+    actual = [e for e in events if not e["planned"]]
+    # Vertrek uit de laadhaven: de eerste echte vertrekmelding.
+    departed = next((e["when"] for e in actual if _is(e, r"departure|departed|vertrek")), None)
+    # Aankomst/lossen in de loshaven: na de laatste keer dat de container aan boord ging (overslag telt niet).
+    last_loaded = max((i for i, e in enumerate(actual) if _is(e, r"loaded|departure|departed")), default=-1)
+    after = actual[last_loaded + 1:]
+    ata = next((e["when"] for e in after if _is(e, r"arrival|arrived|berth")), None)
+    discharged = next((e["when"] for e in after if _is(e, r"discharg")), None)
+    gate_out = next((e["when"] for e in after if _is(e, r"gate out.*(consignee|full)|delivered|picked up")), None)
+    if ata is None:
+        # Samenvatting bovenaan: "Arrived at POD / Sat 03-OCT-2026 / 05:26 PM".
+        for i, line in enumerate(lines):
+            if re.match(r"^\s*(arrived at pod|arrived|aangekomen)\b", line, re.I):
+                ata = _find_date(" ".join(lines[i:i + 3]))
+                break
+    if ata and ata > timezone.now():
+        ata = None
+    planned_arrival = [e["when"] for e in events if e["planned"] and _is(e, r"arrival|berth")]
+    eta = eta or (planned_arrival[-1] if planned_arrival else None)
+    if ata and eta and eta > ata and not planned_arrival:
+        eta = None
 
     pol = _line_after(lines, "POL") or _line_after(lines, "PORT OF LOADING")
-    pol = re.sub(r"\s*\([A-Z]{2}\)\s*$", "", pol).title() if pol else ""
-    if not (eta or vessel):
+    pod = _line_after(lines, "POD") or _line_after(lines, "PORT OF DISCHARGE")
+    if not (eta or ata or vessel):
         return None
     return TrackingResult(
         provider="geplakt",
@@ -125,8 +165,11 @@ def parse_tracking_text(text):
         vessel_name=vessel.upper()[:150],
         voyage=voyage.upper()[:40],
         legs=legs,
-        raw={"bron": "geplakte tekst", "lengte": len(text)},
+        raw={"bron": "geplakte tekst", "lengte": len(text), "gate_out": gate_out.isoformat() if gate_out else None},
         port_of_loading=pol[:100],
+        port_of_discharge=pod[:100],
         terminal=terminal[:100] if terminal and not DATE_RE.search(terminal) else "",
         departed_at=departed,
+        discharged_at=discharged,
+        gate_out_at=gate_out,
     )

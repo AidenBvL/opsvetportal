@@ -8,6 +8,20 @@ DT = {"type": "datetime-local"}
 DT_FORMAT = "%Y-%m-%dT%H:%M"
 
 
+class PortInput(forms.TextInput):
+    """Tekstveld met suggesties uit Stamgegevens > Havens (je kunt de code of de naam typen)."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        from django.utils.html import format_html, format_html_join
+
+        from core.ports import port_index
+
+        list_id = f"ports-{name}"
+        attrs = {**(attrs or {}), "list": list_id, "autocomplete": "off"}
+        options = format_html_join("", '<option value="{}">{}</option>', sorted(port_index()["codes"].items()))
+        return super().render(name, value, attrs, renderer) + format_html('<datalist id="{}">{}</datalist>', list_id, options)
+
+
 def _dt(field_names):
     return {name: forms.DateTimeInput(attrs=DT, format=DT_FORMAT) for name in field_names}
 
@@ -20,12 +34,14 @@ class SeaShipmentForm(forms.ModelForm):
             "shipping_line", "bl_number", "booking_number", "vessel_name", "voyage", "port_of_loading",
             "port_of_discharge", "terminal", "departed_at", "eta", "ata", "free_time_until", "inspection_required", "inspection_point",
             "ched_number", "inspection_status", "inspection_planned_at", "customs_cleared", "goods_description",
-            "temperature_setpoint", "gross_weight_kg", "packages", "status", "handler", "tracking_enabled", "notes",
+            "temperature_setpoint", "gross_weight_kg", "packages", "package_type", "status", "handler", "tracking_enabled", "notes",
         ]
         widgets = {
             **_dt(["departed_at", "eta", "ata", "inspection_planned_at"]),
             "free_time_until": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
             "notes": forms.Textarea(attrs={"rows": 3}),
+            "port_of_loading": PortInput(),
+            "port_of_discharge": PortInput(),
         }
         help_texts = {"vessel_name": "Wordt automatisch bijgewerkt via tracking.", "eta": "Wordt automatisch bijgewerkt via tracking."}
 
@@ -36,7 +52,7 @@ class SeaShipmentForm(forms.ModelForm):
                            "departed_at", "eta", "ata", "free_time_until", "tracking_enabled"]),
         ("Keuring & douane", "clipboard2-check", ["inspection_required", "inspection_point", "ched_number", "inspection_status",
                                                  "inspection_planned_at", "customs_cleared"]),
-        ("Lading", "thermometer-snow", ["goods_description", "temperature_setpoint", "gross_weight_kg", "packages"]),
+        ("Lading", "thermometer-snow", ["goods_description", "temperature_setpoint", "gross_weight_kg", "packages", "package_type"]),
         ("Opmerkingen", "chat-left-text", ["notes"]),
     ]
 

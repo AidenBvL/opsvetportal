@@ -11,7 +11,7 @@
 <dt class="col-5">B/L</dt><dd class="col-7">{{ s.bl_number|default:"-" }}</dd>
 <dt class="col-5">Rederij</dt><dd class="col-7">{{ s.shipping_line.name|default:"-" }}</dd>
 <dt class="col-5">Schip / reis</dt><dd class="col-7">{{ s.vessel_name|default:"-" }} {{ s.voyage }}</dd>
-<dt class="col-5">Van → naar</dt><dd class="col-7">{{ s.port_of_loading|default:"?" }} → {{ s.port_of_discharge }}</dd>
+<dt class="col-5">Van → naar</dt><dd class="col-7">{{ s.port_of_loading|port|default:"?" }} → {{ s.port_of_discharge|port }}</dd>
 <dt class="col-5">ETA</dt><dd class="col-7 fw-semibold">{{ s.eta|date:"l j F H:i"|default:"-" }}</dd>
 <dt class="col-5">Aangekomen</dt><dd class="col-7">{{ s.ata|date:"j F H:i"|default:"-" }}</dd>
 <dt class="col-5">Goederen</dt><dd class="col-7">{{ s.goods_description|default:"-" }}</dd>

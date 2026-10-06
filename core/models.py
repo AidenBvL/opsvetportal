@@ -205,6 +205,45 @@ class NotificationPreference(models.Model):
         return prefs
 
 
+class Port(TimeStampedModel):
+    """Zeehaven met UN/LOCODE. Dossiers slaan de code op; namen uit B/L's en trackingpagina's worden omgezet."""
+
+    locode = models.CharField("UN/LOCODE", max_length=5, unique=True, help_text="Bijv. NLRTM (landcode + 3 tekens).")
+    name = models.CharField("naam", max_length=100)
+    aliases = models.CharField(
+        "andere schrijfwijzen", max_length=300, blank=True,
+        help_text="Komma-gescheiden namen zoals ze op B/L's of trackingpagina's staan, bijv. ANTWERP, ANVERS.",
+    )
+    active = models.BooleanField("actief", default=True)
+
+    class Meta:
+        ordering = ["locode"]
+        verbose_name = "haven"
+        verbose_name_plural = "havens"
+
+    def __str__(self):
+        return f"{self.name} ({self.locode})"
+
+    @property
+    def country(self):
+        return self.locode[:2]
+
+    def save(self, *args, **kwargs):
+        from .ports import clear_cache, recode_shipments
+
+        self.locode = self.locode.replace(" ", "").upper()
+        super().save(*args, **kwargs)
+        clear_cache()
+        recode_shipments()
+
+    def delete(self, *args, **kwargs):
+        from .ports import clear_cache
+
+        result = super().delete(*args, **kwargs)
+        clear_cache()
+        return result
+
+
 class JobRun(models.Model):
     """Laatste uitvoering van geplande taken (voorkomt dubbele dagoverzichten na een herstart)."""
 

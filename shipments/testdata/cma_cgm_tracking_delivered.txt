@@ -1,0 +1,79 @@
+Track my Shipment
+*Required information
+
+Search by Container Number, Shipment Ref or My Ref*
+SSZ1840212
+Clear
+Search
+Tracking details
+Gate out to consignee
+Container SEGU9074220
+45R1 (40RH) 
+New search
+Export PDF
+POL
+PARANAGUA (BR)
+POD
+ROTTERDAM (NL)
+Arrived at POD
+Sat 03-OCT-2026
+05:26 PM
+
+Booking reference
+SSZ1840212
+Empty Return Reference
+CMARFR2026
+Empty return depot
+ROTTERDAM WORLD GATEWAY TERMINAL
+AMOERWEG 50
+3199KD
+NETHERLANDS
+Planned Empty Return Date
+Saturday 10-Oct-2026 11:59 PM
+Date
+Moves
+LocationTerminal
+Vessel (Voyage)
+Hide Previous Moves
+Thursday, 27-AUG-2026
+07:13 PM
+Gate out empty from depot	
+ITAPOA, SC
+LECHMAN TERMINAIS EIRELLI - ITAPOA
+Wednesday, 02-SEP-2026
+04:25 PM
+Ready to be loaded	
+PARANAGUA
+TCP TER DE CONT DE PARANAGUA SA
+Friday, 11-SEP-2026
+02:06 PM
+Loaded on board	
+PARANAGUA
+TCP TER DE CONT DE PARANAGUA SA
+MAERSK LONDRINA ( 0EWOAN1MA)
+Friday, 11-SEP-2026
+10:33 PM
+Vessel Departure	
+PARANAGUA
+TCP TER DE CONT DE PARANAGUA SA
+MAERSK LONDRINA ( 0EWOAN1MA)
+Saturday, 03-OCT-2026
+01:00 PM
+Vessel Arrival	
+ROTTERDAM
+HUTCHISON PORT DELTA II
+MAERSK LONDRINA ( 0EWORS1MA)
+Saturday, 03-OCT-2026
+05:26 PM
+Discharged from Vessel	
+ROTTERDAM
+HUTCHISON PORT DELTA II
+MAERSK LONDRINA ( 0EWORS1MA)
+Tuesday, 06-OCT-2026
+10:13 AM
+Gate out to consignee	
+ROTTERDAM
+HUTCHISON PORT DELTA II
+Times reflected are local Times
+Better Ways CMA CGM
+Version 26R8.0.3 | 10/6/2026 2:46:12 PM
