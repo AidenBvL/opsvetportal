@@ -18,7 +18,7 @@
   <div class="form-text">Voeg deze link toe als "agenda via internet"; diensten en thuiswerkdagen verschijnen dan automatisch.</div>
 </div></div></div>
 <div class="col-md-4"><div class="card"><div class="card-header">Komende diensten</div><ul class="list-group list-group-flush">
-  {% for s in upcoming_shifts %}<li class="list-group-item">{{ s.date|date:"l j F" }} · {{ s.get_shift_type_display }}{% if s.linked_to_wfh %} <span class="badge text-bg-success">thuis</span>{% endif %}</li>{% empty %}<li class="list-group-item text-muted">Geen.</li>{% endfor %}</ul></div></div>
+  {% for s in upcoming_shifts %}<li class="list-group-item">{{ s.date|date:"l j F" }} · {{ s.get_shift_type_display }}{% if s.linked_to_wfh %} <span class="badge text-bg-success">thuis</span>{% endif %}{% if user.employee == object %} <a class="small float-end" href="{% url 'planning:swap_create' s.pk %}">ruilen</a>{% endif %}</li>{% empty %}<li class="list-group-item text-muted">Geen.</li>{% endfor %}</ul></div></div>
 <div class="col-md-4"><div class="card mb-3"><div class="card-header">Komende thuiswerkdagen</div><ul class="list-group list-group-flush">
   {% for w in upcoming_wfh %}<li class="list-group-item">{{ w.date|date:"l j F" }}</li>{% empty %}<li class="list-group-item text-muted">Geen.</li>{% endfor %}</ul></div>
   <div class="card"><div class="card-header d-flex">Afwezigheid{% if perms.planning.add_absence %}<a class="ms-auto small" href="{% url 'planning:absence_create' %}?employee={{ object.pk }}">+ toevoegen</a>{% endif %}</div><ul class="list-group list-group-flush">

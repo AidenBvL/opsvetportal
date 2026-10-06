@@ -1,0 +1,17 @@
+{% autoescape off %}Hallo {{ user.first_name|default:user.username }},
+
+Er staat een {{ action.get_kind_display|lower }} voor je klaar:
+
+  {{ action.title }}
+  Prioriteit: {{ action.get_priority_display }}
+  Deadline:   {{ action.due_date|date:"l j F"|default:"geen" }}
+{% if action.customer %}  Klant:      {{ action.customer }}
+{% endif %}{% if action.sea_shipment %}  Container:  {{ action.sea_shipment.container_number }}
+{% endif %}
+{{ action.description }}
+
+Openen: {{ url }}
+
+-- 
+OPS/VET Portaal. Meldingen aanpassen: {{ base_url }}/beheer/mijn-meldingen/
+{% endautoescape %}

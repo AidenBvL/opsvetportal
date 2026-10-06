@@ -20,6 +20,8 @@
     <a class="text-white text-decoration-none dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> {{ user.get_full_name|default:user.username }}</a>
     <ul class="dropdown-menu dropdown-menu-end">
       {% if user.employee %}<li><a class="dropdown-item" href="{% url 'planning:employee_detail' user.employee.pk %}">Mijn rooster</a></li>{% endif %}
+      <li><a class="dropdown-item" href="{% url 'planning:swap_list' %}">Ruilverzoeken</a></li>
+      <li><a class="dropdown-item" href="{% url 'core:notification_prefs' %}">Mijn e-mailmeldingen</a></li>
       <li><a class="dropdown-item" href="{% url 'password_change' %}">Wachtwoord wijzigen</a></li>
       {% if user.is_superuser %}<li><a class="dropdown-item" href="{% url 'admin:index' %}">Django admin</a></li>{% endif %}
       <li><hr class="dropdown-divider"></li>
@@ -35,8 +37,7 @@
           <div class="nav-section">{{ section.title }}</div>
           <ul class="nav flex-column mb-2">
             {% for item in section.items %}
-              {% url item.url_name as item_url %}
-              <li class="nav-item"><a class="nav-link{% if request.path == item_url or item_url != '/' and item_url in request.path %} active{% endif %}" href="{{ item_url }}"><i class="bi bi-{{ item.icon }}"></i> {{ item.label }}</a></li>
+              <li class="nav-item"><a class="nav-link{% if item.active %} active{% endif %}" href="{{ item.url }}"><i class="bi bi-{{ item.icon }}"></i> {{ item.label }}</a></li>
             {% endfor %}
           </ul>
         {% endfor %}

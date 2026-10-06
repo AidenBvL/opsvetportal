@@ -173,3 +173,45 @@ class Shift(models.Model):
 
     def __str__(self):
         return f"{self.get_shift_type_display()} {self.date:%d-%m-%Y}: {self.employee}"
+
+
+class ShiftSwapRequest(TimeStampedModel):
+    STATUS_WAIT_COLLEAGUE = "wacht_collega"
+    STATUS_WAIT_PLANNER = "wacht_planner"
+    STATUS_APPROVED = "goedgekeurd"
+    STATUS_REJECTED = "afgewezen"
+    STATUS_DECLINED = "geweigerd"
+    STATUS_CANCELLED = "ingetrokken"
+    STATUS_CHOICES = [
+        (STATUS_WAIT_COLLEAGUE, "Wacht op collega"),
+        (STATUS_WAIT_PLANNER, "Wacht op goedkeuring planner"),
+        (STATUS_APPROVED, "Goedgekeurd en verwerkt"),
+        (STATUS_DECLINED, "Geweigerd door collega"),
+        (STATUS_REJECTED, "Afgewezen door planner"),
+        (STATUS_CANCELLED, "Ingetrokken"),
+    ]
+    OPEN_STATUSES = [STATUS_WAIT_COLLEAGUE, STATUS_WAIT_PLANNER]
+
+    shift = models.ForeignKey(Shift, verbose_name="dienst", on_delete=models.CASCADE, related_name="swap_requests")
+    requester = models.ForeignKey(Employee, verbose_name="aanvrager", on_delete=models.CASCADE, related_name="swap_requests_sent")
+    colleague = models.ForeignKey(Employee, verbose_name="collega die overneemt", on_delete=models.CASCADE, related_name="swap_requests_received")
+    colleague_shift = models.ForeignKey(
+        Shift, verbose_name="in ruil voor dienst van collega", null=True, blank=True, on_delete=models.CASCADE, related_name="+",
+        help_text="Leeg laten als de collega de dienst overneemt zonder ruil.",
+    )
+    message = models.CharField("bericht", max_length=300, blank=True)
+    status = models.CharField("status", max_length=20, choices=STATUS_CHOICES, default=STATUS_WAIT_COLLEAGUE)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    decision_note = models.CharField("toelichting planner", max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "ruilverzoek"
+        verbose_name_plural = "ruilverzoeken"
+
+    def __str__(self):
+        return f"Ruil {self.shift} → {self.colleague}"
+
+    @property
+    def is_open(self):
+        return self.status in self.OPEN_STATUSES

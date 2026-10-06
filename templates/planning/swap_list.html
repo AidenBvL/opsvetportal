@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% load portal %}
+{% block title %}Ruilverzoeken{% endblock %}
+{% block content %}
+<h3>Ruilverzoeken diensten</h3>
+<p class="text-muted small">Zo werkt het: jij vraagt een collega → de collega accepteert → een planner keurt goed → het rooster wordt automatisch aangepast. Iedereen krijgt bij elke stap een e-mail.</p>
+
+{% if to_approve %}
+<div class="card mb-3 border-warning"><div class="card-header">Ter goedkeuring (planner)</div>
+<ul class="list-group list-group-flush">{% for s in to_approve %}
+<li class="list-group-item">
+  <div><strong>{{ s.shift.get_shift_type_display }} {{ s.shift.date|date:"l j F" }}</strong>: {{ s.requester }} → {{ s.colleague }}{% if s.colleague_shift %}, in ruil voor {{ s.colleague_shift.get_shift_type_display|lower }} {{ s.colleague_shift.date|date:"l j F" }}{% else %} (overname){% endif %}</div>
+  {% if s.message %}<div class="small text-muted">"{{ s.message }}"</div>{% endif %}
+  {% for issue in s.issues %}<div class="small text-danger"><i class="bi bi-exclamation-triangle"></i> {{ issue }}</div>{% empty %}<div class="small text-success"><i class="bi bi-check2"></i> Geen conflicten met de spelregels.</div>{% endfor %}
+  <form method="post" action="{% url 'planning:swap_action' s.pk %}" class="d-flex gap-2 mt-1">{% csrf_token %}
+    <input name="note" class="form-control form-control-sm" placeholder="Toelichting (optioneel)" style="max-width:320px">
+    <button class="btn btn-sm btn-success" name="action" value="approve">Goedkeuren</button>
+    <button class="btn btn-sm btn-outline-danger" name="action" value="reject">Afwijzen</button>
+  </form>
+</li>{% endfor %}</ul></div>
+{% endif %}
+
+<div class="row g-3">
+<div class="col-lg-4"><div class="card"><div class="card-header">Mijn komende diensten</div>
+<ul class="list-group list-group-flush">{% for s in my_shifts %}<li class="list-group-item d-flex align-items-center">{{ s.date|date:"D j M" }} · {{ s.get_shift_type_display }}<a class="btn btn-sm btn-outline-primary ms-auto" href="{% url 'planning:swap_create' s.pk %}"><i class="bi bi-arrow-left-right"></i> Ruil aanvragen</a></li>
+{% empty %}<li class="list-group-item text-muted">{% if employee %}Geen komende diensten.{% else %}Je account is niet gekoppeld aan een medewerker.{% endif %}</li>{% endfor %}</ul></div></div>
+
+<div class="col-lg-4"><div class="card"><div class="card-header">Verzoeken aan mij</div>
+<ul class="list-group list-group-flush">{% for s in incoming %}<li class="list-group-item">
+  <div>{{ s.requester }} vraagt of je de <strong>{{ s.shift.get_shift_type_display|lower }} van {{ s.shift.date|date:"l j F" }}</strong> overneemt{% if s.colleague_shift %}, in ruil voor jouw {{ s.colleague_shift.get_shift_type_display|lower }} van {{ s.colleague_shift.date|date:"j F" }}{% endif %}.</div>
+  {% if s.message %}<div class="small text-muted">"{{ s.message }}"</div>{% endif %}
+  <form method="post" action="{% url 'planning:swap_action' s.pk %}" class="d-flex gap-2 mt-1">{% csrf_token %}
+    <button class="btn btn-sm btn-success" name="action" value="accept">Accepteren</button>
+    <button class="btn btn-sm btn-outline-danger" name="action" value="decline">Weigeren</button></form>
+</li>{% empty %}<li class="list-group-item text-muted">Geen openstaande verzoeken.</li>{% endfor %}</ul></div></div>
+
+<div class="col-lg-4"><div class="card"><div class="card-header">Mijn aanvragen</div>
+<ul class="list-group list-group-flush">{% for s in outgoing %}<li class="list-group-item small">
+  <div class="d-flex"><span>{{ s.shift.date|date:"D j M" }} → {{ s.colleague.first_name }}</span><span class="ms-auto">{% badge s.status s.get_status_display %}</span></div>
+  {% if s.decision_note %}<div class="text-muted">{{ s.decision_note }}</div>{% endif %}
+  {% if s.is_open %}<form method="post" action="{% url 'planning:swap_action' s.pk %}">{% csrf_token %}<button class="btn btn-link btn-sm p-0" name="action" value="cancel">intrekken</button></form>{% endif %}
+</li>{% empty %}<li class="list-group-item text-muted">Nog geen aanvragen.</li>{% endfor %}</ul></div></div>
+</div>
+
+{% if recent %}
+<div class="card mt-3"><div class="card-header">Recent afgehandeld</div><table class="table table-sm mb-0">
+{% for s in recent %}<tr><td>{{ s.shift.date|date:"d-m-Y" }}</td><td>{{ s.requester }} → {{ s.colleague }}</td><td>{% badge s.status s.get_status_display %}</td><td class="small text-muted">{{ s.decided_by|default:"" }} {{ s.decision_note }}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+{% endblock %}

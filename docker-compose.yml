@@ -21,13 +21,13 @@ services:
     depends_on:
       - db
 
-  # Haalt elke 30 minuten de nieuwste ETA / het zeeschip op voor alle open containers.
-  tracking:
+  # Ververst elke 30 minuten de ETA's en verstuurt dagelijks het dagoverzicht en dienstherinneringen.
+  scheduler:
     build: .
     env_file: .env
     environment:
       DATABASE_URL: postgres://opsvet:${POSTGRES_PASSWORD:-wijzig-mij}@db:5432/opsvet
-    command: python manage.py refresh_tracking --loop 30
+    command: python manage.py run_scheduler
     depends_on:
       - web
 

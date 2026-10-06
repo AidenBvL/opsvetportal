@@ -25,6 +25,25 @@
       {% if object.notes %}<hr><div class="small" style="white-space:pre-wrap">{{ object.notes }}</div>{% endif %}
     </div></div>
     <div class="card mb-3"><div class="card-header">Extra kosten (totaal)</div><div class="card-body">{% include "core/_cost_totals.html" %}</div></div>
+    {% if perms.auth.view_user %}
+    <div class="card mb-3" id="klantportaal"><div class="card-header"><i class="bi bi-globe"></i> Klantportaal-accounts</div>
+      <ul class="list-group list-group-flush small">{% for u in portal_users %}
+        <li class="list-group-item d-flex align-items-center">{{ u.get_full_name|default:u.username }}<span class="text-muted ms-1">{{ u.email }}</span>
+          {% if not u.is_active %}<span class="badge text-bg-secondary ms-1">geblokkeerd</span>{% elif not u.has_usable_password %}<span class="badge text-bg-warning ms-1">uitgenodigd</span>{% endif %}
+          {% if perms.auth.change_user %}<form method="post" action="{% url 'core:customer_account_action' object.pk u.pk %}" class="ms-auto d-flex gap-1">{% csrf_token %}
+            <button class="btn btn-sm btn-link p-0" name="action" value="invite" title="Nieuwe link sturen"><i class="bi bi-envelope"></i></button>
+            <button class="btn btn-sm btn-link p-0 text-danger" name="action" value="toggle" title="Blokkeren / activeren"><i class="bi bi-{% if u.is_active %}lock{% else %}unlock{% endif %}"></i></button></form>{% endif %}
+        </li>{% empty %}<li class="list-group-item text-muted">Nog geen klantaccounts.</li>{% endfor %}</ul>
+      {% if perms.auth.add_user %}<div class="card-body border-top"><form method="post" action="{% url 'core:customer_account_create' object.pk %}" class="row g-1">{% csrf_token %}
+        <div class="col-6"><input class="form-control form-control-sm" name="first_name" placeholder="Voornaam" required></div>
+        <div class="col-6"><input class="form-control form-control-sm" name="last_name" placeholder="Achternaam"></div>
+        <div class="col-12"><input class="form-control form-control-sm" type="email" name="email" placeholder="E-mailadres" required></div>
+        <div class="col-12"><button class="btn btn-sm btn-outline-primary mt-1">Account aanmaken en uitnodigen</button>
+        <div class="form-text">De klant krijgt een link om zelf een wachtwoord in te stellen en ziet alleen eigen containers, ETA's en keuringsstatus - geen kosten, acties of interne notities.</div></div>
+      </form></div>{% endif %}
+    </div>
+    {% endif %}
+    {% if perms.core.view_auditlog %}{% include "core/_history.html" %}{% endif %}
   </div>
   <div class="col-lg-8">
     <div class="card mb-3"><div class="card-header">Inkomende zeecontainers ({{ sea_open|length }} open, {{ sea_closed_count }} afgerond)</div>

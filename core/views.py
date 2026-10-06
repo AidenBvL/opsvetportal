@@ -14,6 +14,7 @@ from meetings.models import MeetingItem
 from planning.models import Shift, WorkFromHomeDay
 from shipments.models import RoadTransport, SeaShipment, TrackingUpdate
 
+from .audit import history_for
 from .forms import GroupForm, UserForm
 from .models import Customer
 
@@ -85,6 +86,8 @@ class CustomerDetailView(PermissionRequiredMixin, generic.DetailView):
                 "costs": costs.select_related("action")[:20],
                 "cost_totals": cost_summary(costs),
                 "documents": c.documents.all()[:10],
+                "history": history_for(c),
+                "portal_users": User.objects.filter(profile__customer=c).order_by("email"),
             }
         )
         return context
@@ -96,7 +99,7 @@ class CustomerDetailView(PermissionRequiredMixin, generic.DetailView):
 class UserListView(PermissionRequiredMixin, generic.ListView):
     permission_required = "auth.view_user"
     template_name = "core/user_list.html"
-    queryset = User.objects.order_by("username").prefetch_related("groups").select_related("employee")
+    queryset = User.objects.exclude(profile__customer__isnull=False).order_by("username").prefetch_related("groups").select_related("employee")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -136,3 +139,111 @@ class GroupCreateView(GroupFormMixin, generic.CreateView):
 
 class GroupUpdateView(GroupFormMixin, generic.UpdateView):
     permission_required = "auth.change_group"
+
+
+class AuditLogView(PermissionRequiredMixin, generic.ListView):
+    permission_required = "core.view_auditlog"
+    template_name = "core/auditlog.html"
+    paginate_by = 100
+
+    def get_queryset(self):
+        from .models import AuditLog
+
+        qs = AuditLog.objects.select_related("user", "content_type")
+        params = self.request.GET
+        if params.get("gebruiker"):
+            qs = qs.filter(user_id=params["gebruiker"])
+        if params.get("soort"):
+            qs = qs.filter(content_type_id=params["soort"])
+        if params.get("q"):
+            qs = qs.filter(Q(object_repr__icontains=params["q"]) | Q(message__icontains=params["q"]))
+        return qs
+
+    def get_context_data(self, **kwargs):
+        from django.contrib.contenttypes.models import ContentType
+
+        from .models import AuditLog
+
+        context = super().get_context_data(**kwargs)
+        used = AuditLog.objects.values_list("content_type", flat=True).distinct()
+        context["types"] = [(ct.pk, ct.model_class()._meta.verbose_name_plural.capitalize())
+                            for ct in ContentType.objects.filter(pk__in=used) if ct.model_class()]
+        context["users"] = User.objects.order_by("username")
+        context["params"] = self.request.GET
+        return context
+
+
+class NotificationPreferenceView(generic.UpdateView):
+    template_name = "core/notification_prefs.html"
+    success_url = reverse_lazy("core:notification_prefs")
+
+    def get_form_class(self):
+        from .forms import NotificationPreferenceForm
+
+        return NotificationPreferenceForm
+
+    def get_object(self, queryset=None):
+        from .models import NotificationPreference
+
+        return NotificationPreference.for_user(self.request.user)
+
+    def form_valid(self, form):
+        messages.success(self.request, "Meldingsvoorkeuren opgeslagen.")
+        return super().form_valid(form)
+
+
+# --- Klantportaal-accounts ---------------------------------------------------
+
+
+def _customer_account_redirect(customer):
+    from django.shortcuts import redirect
+
+    return redirect(f"/beheer/klanten/{customer.pk}/#klantportaal")
+
+
+def customer_account_create(request, pk):
+    from django.core.exceptions import PermissionDenied
+    from django.db import transaction
+    from django.shortcuts import get_object_or_404
+
+    from .forms import CustomerAccountForm
+    from .models import UserProfile
+    from .notifications import send_invite
+
+    if request.method != "POST" or not request.user.has_perm("auth.add_user"):
+        raise PermissionDenied
+    customer = get_object_or_404(Customer, pk=pk)
+    form = CustomerAccountForm(request.POST)
+    if form.is_valid():
+        with transaction.atomic():
+            user = User(username=form.cleaned_data["email"], email=form.cleaned_data["email"],
+                        first_name=form.cleaned_data["first_name"], last_name=form.cleaned_data["last_name"])
+            user.set_unusable_password()
+            user.save()
+            UserProfile.objects.create(user=user, customer=customer)
+            send_invite(user)
+        messages.success(request, f"Klantaccount aangemaakt; {user.email} ontvangt een link om een wachtwoord in te stellen.")
+    else:
+        messages.error(request, " ".join(e for errors in form.errors.values() for e in errors))
+    return _customer_account_redirect(customer)
+
+
+def customer_account_action(request, pk, user_id):
+    from django.core.exceptions import PermissionDenied
+    from django.shortcuts import get_object_or_404
+
+    from .notifications import send_invite
+
+    if request.method != "POST" or not request.user.has_perm("auth.change_user"):
+        raise PermissionDenied
+    customer = get_object_or_404(Customer, pk=pk)
+    user = get_object_or_404(User, pk=user_id, profile__customer=customer)
+    action = request.POST.get("action")
+    if action == "invite":
+        send_invite(user)
+        messages.success(request, f"Nieuwe uitnodiging verstuurd naar {user.email}.")
+    elif action == "toggle":
+        user.is_active = not user.is_active
+        user.save(update_fields=["is_active"])
+        messages.info(request, f"Account {user.email} {'geactiveerd' if user.is_active else 'geblokkeerd'}.")
+    return _customer_account_redirect(customer)

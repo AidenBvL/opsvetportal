@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "actions",
     "shipments",
     "documents",
+    "customer_portal",
 ]
 
 MIDDLEWARE = [
@@ -44,6 +45,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.LoginRequiredMiddleware",
+    "customer_portal.middleware.CustomerPortalMiddleware",
+    "core.audit.CurrentUserMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -134,3 +137,20 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": os.environ.get("LOG_LEVEL", "INFO")},
 }
+
+# --- E-mail ----------------------------------------------------------------
+# Zonder EMAIL_HOST worden mails naar de console geschreven (handig bij testen).
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST else "django.core.mail.backends.console.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "OPS/VET Portaal <noreply@example.com>")
+# Basis-URL voor links in e-mails, bijv. https://portaal.example.nl
+PORTAL_BASE_URL = os.environ.get("PORTAL_BASE_URL", "http://localhost:8000").rstrip("/")
+# Tijdstip (HH:MM) waarop het dagoverzicht en de dienstherinneringen worden verstuurd.
+DAILY_DIGEST_TIME = os.environ.get("DAILY_DIGEST_TIME", "07:30")

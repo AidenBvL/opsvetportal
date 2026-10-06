@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block anonymous %}
+<div class="container" style="max-width:440px;margin-top:10vh"><div class="card p-4">
+<h4 class="mb-3"><i class="bi bi-box-seam"></i> OPS/VET Portaal</h4>
+{% block auth %}{% endblock %}
+</div></div>
+{% endblock %}
+{% block content %}<div style="max-width:500px">{% block auth_in %}{% endblock %}</div>{% endblock %}

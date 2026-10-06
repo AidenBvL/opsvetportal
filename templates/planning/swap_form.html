@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Ruil aanvragen: {{ shift.get_shift_type_display|lower }} {{ shift.date|date:"l j F Y" }}</h3>
+<div class="card" style="max-width:640px"><div class="card-body">
+<form method="post">{% csrf_token %}{% include "core/_form_fields.html" with cols=12 %}
+<button class="btn btn-primary">Verzoek versturen</button> <a class="btn btn-outline-secondary" href="{% url 'planning:swap_list' %}">Annuleren</a></form>
+</div></div>
+{% endblock %}

@@ -57,6 +57,7 @@
     <dt class="col-5">Tracking</dt><dd class="col-7">{% if object.tracking_enabled %}aan{% else %}uit{% endif %} · {{ object.tracking_last_checked|date:"j M H:i"|default:"nog niet" }}{% if object.tracking_last_error %}<div class="text-danger">{{ object.tracking_last_error }}</div>{% endif %}</dd>
   </dl></div></div>
   {% if object.notes %}<div class="card mb-3"><div class="card-header">Opmerkingen</div><div class="card-body small" style="white-space:pre-wrap">{{ object.notes }}</div></div>{% endif %}
+    {% if perms.core.view_auditlog %}{% include "core/_history.html" %}{% endif %}
 </div>
 <div class="col-lg-4">
   <div class="card mb-3"><div class="card-header">Tracking historie</div>

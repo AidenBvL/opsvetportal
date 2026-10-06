@@ -1,0 +1,12 @@
+{% if history %}
+<div class="card mb-3"><div class="card-header"><i class="bi bi-clock-history"></i> Wijzigingen</div>
+<ul class="list-group list-group-flush small" style="max-height:340px;overflow:auto">
+{% for h in history %}
+<li class="list-group-item">
+  <div class="d-flex"><span class="fw-semibold">{{ h.get_action_display }}</span><span class="ms-2 text-muted">{% if h.user %}{{ h.user.get_full_name|default:h.user.username }}{% else %}systeem{% endif %}</span><span class="ms-auto text-muted">{{ h.timestamp|date:"j M Y H:i" }}</span></div>
+  {% if h.message %}<div>{{ h.message }}</div>{% endif %}
+  {% for field, change in h.changes.items %}<div><span class="text-muted">{{ field }}:</span> <span class="text-decoration-line-through text-muted">{{ change.0|default:"leeg" }}</span> → {{ change.1|default:"leeg" }}</div>{% endfor %}
+</li>
+{% endfor %}
+</ul></div>
+{% endif %}

@@ -9,6 +9,8 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views import generic
+
+from core.audit import history_for
 from django.views.decorators.http import require_POST
 
 from core.crud import CrudCreateView, CrudListView, CrudUpdateView
@@ -86,7 +88,8 @@ class ActionDetailView(PermissionRequiredMixin, generic.DetailView):
         context = super().get_context_data(**kwargs)
         costs = self.object.costs.all()
         context.update({"costs": costs, "cost_form": InlineCostForm(), "cost_totals": cost_summary(costs),
-                        "total": costs.aggregate(t=Sum("amount"))["t"] or Decimal("0")})
+                        "total": costs.aggregate(t=Sum("amount"))["t"] or Decimal("0"),
+                        "history": history_for(self.object)})
         return context
 
 

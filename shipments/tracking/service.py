@@ -39,6 +39,7 @@ def refresh_shipment(shipment: SeaShipment) -> TrackingUpdate | None:
         )
 
     messages = []
+    old_eta = shipment.eta
     eta_changed = False
     vessel_changed = False
 
@@ -89,10 +90,17 @@ def refresh_shipment(shipment: SeaShipment) -> TrackingUpdate | None:
         raw=_json_safe(result.raw),
     )
 
+    from core import notifications
+
+    if vessel_changed:
+        notifications.vessel_changed(shipment, update)
+    elif eta_changed:
+        notifications.eta_changed(shipment, update, old_eta)
+
     if vessel_changed:
         from actions.models import Action
 
-        Action.objects.create(
+        action = Action(
             title=f"Schipwissel {shipment.container_number}: nu op {new_vessel}",
             description=update.message,
             priority=3,
@@ -101,6 +109,8 @@ def refresh_shipment(shipment: SeaShipment) -> TrackingUpdate | None:
             owner=shipment.handler,
             due_date=timezone.localdate(),
         )
+        action._skip_notify = True  # de behandelaar krijgt al de schipwissel-mail
+        action.save()
     return update
 
 

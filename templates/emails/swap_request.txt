@@ -1,0 +1,19 @@
+{% autoescape off %}Hallo {{ user.first_name|default:user.username }},
+
+Ruilverzoek dienst - status: {{ swap.get_status_display }}
+
+  Aangevraagd door: {{ swap.requester }}
+  Dienst:           {{ swap.shift.get_shift_type_display }} {{ swap.shift.date|date:"l j F" }}
+  Overnemen door:   {{ swap.colleague }}
+{% if swap.colleague_shift %}  In ruil voor:     {{ swap.colleague_shift.get_shift_type_display }} {{ swap.colleague_shift.date|date:"l j F" }}
+{% else %}  (overname, geen dienst terug)
+{% endif %}{% if swap.message %}
+Bericht: {{ swap.message }}
+{% endif %}{% if swap.decision_note %}
+Toelichting planner: {{ swap.decision_note }}
+{% endif %}
+Bekijken: {{ url }}
+
+-- 
+OPS/VET Portaal. Meldingen aanpassen: {{ base_url }}/beheer/mijn-meldingen/
+{% endautoescape %}

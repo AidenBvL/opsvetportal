@@ -309,3 +309,112 @@ class EmployeeAgendaView(PermissionRequiredMixin, generic.DetailView):
             "ics_url": self.request.build_absolute_uri(reverse("planning:ics", args=[e.calendar_token])),
         })
         return context
+
+
+# --- Ruilverzoeken -----------------------------------------------------------
+
+
+class SwapRequestForm(forms.Form):
+    colleague = forms.ModelChoiceField(label="Collega die overneemt", queryset=Employee.objects.none())
+    colleague_shift = forms.ModelChoiceField(
+        label="In ruil voor (optioneel)", queryset=Shift.objects.none(), required=False,
+        help_text="Kies een dienst van de collega die jij dan overneemt, of laat leeg voor een overname.",
+    )
+    message = forms.CharField(label="Bericht", required=False, max_length=300)
+
+    def __init__(self, *args, shift, **kwargs):
+        super().__init__(*args, **kwargs)
+        today = timezone.localdate()
+        self.fields["colleague"].queryset = Employee.objects.filter(active=True, in_shift_pool=True).exclude(pk=shift.employee_id)
+        self.fields["colleague_shift"].queryset = Shift.objects.filter(date__gte=today).exclude(employee=shift.employee).select_related("employee")
+        self.fields["colleague_shift"].label_from_instance = lambda s: f"{s.date:%a %d-%m} {s.get_shift_type_display()} - {s.employee}"
+
+
+def _my_employee(request):
+    employee = getattr(request.user, "employee", None)
+    if employee is None:
+        messages.error(request, "Je account is niet gekoppeld aan een medewerker; vraag een beheerder dit te doen.")
+    return employee
+
+
+class SwapListView(generic.TemplateView):
+    template_name = "planning/swap_list.html"
+
+    def get_context_data(self, **kwargs):
+        from . import swaps
+        from .models import ShiftSwapRequest
+
+        context = super().get_context_data(**kwargs)
+        employee = getattr(self.request.user, "employee", None)
+        qs = ShiftSwapRequest.objects.select_related("shift", "requester", "colleague", "colleague_shift", "decided_by")
+        is_planner = self.request.user.has_perm("planning.generate_roster")
+        to_approve = list(qs.filter(status=ShiftSwapRequest.STATUS_WAIT_PLANNER)) if is_planner else []
+        for swap in to_approve:
+            swap.issues = swaps.preview_issues(swap)
+        context.update({
+            "employee": employee,
+            "is_planner": is_planner,
+            "incoming": qs.filter(colleague=employee, status=ShiftSwapRequest.STATUS_WAIT_COLLEAGUE) if employee else [],
+            "outgoing": qs.filter(requester=employee)[:20] if employee else [],
+            "to_approve": to_approve,
+            "my_shifts": Shift.objects.filter(employee=employee, date__gte=timezone.localdate()) if employee else [],
+            "recent": qs.exclude(status__in=ShiftSwapRequest.OPEN_STATUSES)[:15] if is_planner else [],
+        })
+        return context
+
+
+class SwapCreateView(generic.FormView):
+    template_name = "planning/swap_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.shift = get_object_or_404(Shift.objects.select_related("employee"), pk=kwargs["pk"])
+        self.employee = getattr(request.user, "employee", None)
+        if self.employee is None or self.shift.employee_id != self.employee.id:
+            messages.error(request, "Je kunt alleen een ruil aanvragen voor je eigen diensten.")
+            return redirect("planning:swap_list")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form(self, form_class=None):
+        return SwapRequestForm(self.request.POST or None, shift=self.shift)
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(shift=self.shift, **kwargs)
+
+    def form_valid(self, form):
+        from . import swaps
+
+        try:
+            swaps.create(self.shift, self.employee, form.cleaned_data["colleague"],
+                         form.cleaned_data["colleague_shift"], form.cleaned_data["message"])
+        except swaps.SwapError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        messages.success(self.request, f"Ruilverzoek verstuurd naar {form.cleaned_data['colleague']}.")
+        return redirect("planning:swap_list")
+
+
+@require_POST
+def swap_action(request, pk):
+    from . import swaps
+    from .models import ShiftSwapRequest
+
+    swap = get_object_or_404(ShiftSwapRequest, pk=pk)
+    action = request.POST.get("action")
+    employee = getattr(request.user, "employee", None)
+    try:
+        if action in ("accept", "decline"):
+            swaps.respond(swap, employee, accept=action == "accept")
+        elif action == "cancel":
+            swaps.cancel(swap, employee)
+        elif action in ("approve", "reject"):
+            if not request.user.has_perm("planning.generate_roster"):
+                raise swaps.SwapError("Alleen een planner kan ruilverzoeken goedkeuren.")
+            swaps.decide(swap, request.user, approve=action == "approve", note=request.POST.get("note", ""))
+        else:
+            raise swaps.SwapError("Onbekende actie.")
+    except swaps.SwapError as exc:
+        messages.error(request, str(exc))
+    else:
+        swap.refresh_from_db()
+        messages.success(request, f"Ruilverzoek: {swap.get_status_display().lower()}.")
+    return redirect("planning:swap_list")

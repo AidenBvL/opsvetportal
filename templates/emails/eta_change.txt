@@ -1,0 +1,14 @@
+{% autoescape off %}Hallo {{ user.first_name|default:user.username }},
+
+De ETA van container {{ shipment.container_number }} ({{ shipment.customer }}) is gewijzigd met {{ hours }} uur.
+
+  Was:   {{ old_eta|date:"l j F H:i" }}
+  Nu:    {{ shipment.eta|date:"l j F H:i" }}
+  Schip: {{ shipment.vessel_name|default:"-" }}
+  Keurpunt: {{ shipment.inspection_point|default:"-" }}
+
+Controleer of de keuring en het transport nog kloppen: {{ url }}
+
+-- 
+OPS/VET Portaal. Meldingen aanpassen: {{ base_url }}/beheer/mijn-meldingen/
+{% endautoescape %}

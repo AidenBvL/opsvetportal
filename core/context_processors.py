@@ -4,6 +4,7 @@ NAV = [
     ]),
     ("Planning", [
         ("planning:calendar", "Agenda & rooster", "calendar3", "planning.view_shift"),
+        ("planning:swap_list", "Ruilverzoeken", "arrow-left-right", "planning.view_shift"),
         ("planning:employee_list", "Medewerkers", "people", "planning.view_employee"),
         ("planning:absence_list", "Afwezigheid", "airplane", "planning.view_absence"),
     ]),
@@ -25,6 +26,7 @@ NAV = [
     ]),
     ("Beheer", [
         ("core:user_list", "Accounts & rechten", "person-lock", "auth.view_user"),
+        ("core:auditlog", "Wijzigingslog", "clock-history", "core.view_auditlog"),
     ]),
 ]
 
@@ -33,13 +35,22 @@ def navigation(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         return {"nav_sections": []}
+    if getattr(request, "portal_customer", None) is not None:
+        return {"nav_sections": [], "is_portal_customer": True, "customer": request.portal_customer}
+    from django.urls import reverse
+
     sections = []
     for title, items in NAV:
         visible = [
-            {"url_name": url, "label": label, "icon": icon}
+            {"url": reverse(url), "label": label, "icon": icon}
             for url, label, icon, perm in items
             if perm is None or user.has_perm(perm)
         ]
         if visible:
             sections.append({"title": title, "items": visible})
+    # Het langste menu-item dat met het huidige pad begint is actief.
+    path = request.path
+    matches = [i for s in sections for i in s["items"] if path == i["url"] or (i["url"] != "/" and path.startswith(i["url"]))]
+    if matches:
+        max(matches, key=lambda i: len(i["url"]))["active"] = True
     return {"nav_sections": sections}

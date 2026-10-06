@@ -10,6 +10,7 @@
       <div class="mb-3"><label class="form-label">Wachtwoord</label><input class="form-control" type="password" name="password" required></div>
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn btn-primary w-100">Inloggen</button>
+      <a class="small d-block mt-2 text-center" href="{% url 'password_reset' %}">Wachtwoord vergeten?</a>
     </form>
   </div>
 </div>

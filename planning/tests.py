@@ -233,3 +233,73 @@ class PlanningViewTests(TestCase):
         r = self.client.get(f"/agenda/ics/{e.calendar_token}.ics")
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"BEGIN:VEVENT", r.content)
+
+
+class SwapTests(TestCase):
+    def setUp(self):
+        from django.core import mail  # noqa: F401
+
+        self.andy_user = User.objects.create_user("andy", email="andy@example.com", password="pw")
+        self.mitchell_user = User.objects.create_user("mitchell", email="mitchell@example.com", password="pw")
+        self.planner = User.objects.create_superuser("raymond", "raymond@example.com", "pw")
+        self.andy = Employee.objects.create(name="Andy Salihi", user=self.andy_user)
+        self.mitchell = Employee.objects.create(name="Mitchell De Jong", user=self.mitchell_user)
+        self.shift = Shift.objects.create(date=date(2030, 10, 8), shift_type=EVENING, employee=self.andy)
+        self.other = Shift.objects.create(date=date(2030, 10, 10), shift_type=EVENING, employee=self.mitchell)
+
+    def test_full_swap_flow(self):
+        from django.core import mail
+
+        from .models import ShiftSwapRequest
+
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            self.client.force_login(self.andy_user)
+            with self.captureOnCommitCallbacks(execute=True):
+                r = self.client.post(f"/agenda/ruilen/dienst/{self.shift.pk}/", {"colleague": self.mitchell.pk, "colleague_shift": self.other.pk, "message": "tandarts"})
+            self.assertEqual(r.status_code, 302)
+            swap = ShiftSwapRequest.objects.get()
+            self.assertEqual(mail.outbox[-1].to, ["mitchell@example.com"])
+
+            # Andy mag zijn eigen verzoek niet accepteren
+            self.client.post(f"/agenda/ruilen/{swap.pk}/", {"action": "accept"})
+            swap.refresh_from_db()
+            self.assertEqual(swap.status, "wacht_collega")
+
+            self.client.force_login(self.mitchell_user)
+            with self.captureOnCommitCallbacks(execute=True):
+                self.client.post(f"/agenda/ruilen/{swap.pk}/", {"action": "accept"})
+            swap.refresh_from_db()
+            self.assertEqual(swap.status, "wacht_planner")
+            self.assertIn(["raymond@example.com"], [m.to for m in mail.outbox])
+
+            # Mitchell is geen planner
+            self.client.post(f"/agenda/ruilen/{swap.pk}/", {"action": "approve"})
+            swap.refresh_from_db()
+            self.assertEqual(swap.status, "wacht_planner")
+
+            self.client.force_login(self.planner)
+            page = self.client.get("/agenda/ruilen/")
+            self.assertContains(page, "Ter goedkeuring")
+            with self.captureOnCommitCallbacks(execute=True):
+                self.client.post(f"/agenda/ruilen/{swap.pk}/", {"action": "approve", "note": "ok"})
+            self.shift.refresh_from_db()
+            self.other.refresh_from_db()
+            self.assertEqual((self.shift.employee, self.other.employee), (self.mitchell, self.andy))
+            self.assertTrue(self.shift.is_manual and self.other.is_manual)
+            self.assertEqual(ShiftSwapRequest.objects.get().status, "goedgekeurd")
+
+    def test_cannot_request_for_someone_elses_shift(self):
+        self.client.force_login(self.mitchell_user)
+        r = self.client.post(f"/agenda/ruilen/dienst/{self.shift.pk}/", {"colleague": self.andy.pk})
+        self.assertRedirects(r, "/agenda/ruilen/", fetch_redirect_response=False)
+        from .models import ShiftSwapRequest
+
+        self.assertFalse(ShiftSwapRequest.objects.exists())
+
+    def test_preview_shows_rule_conflicts(self):
+        from . import swaps
+        from .models import ShiftSwapRequest
+
+        Shift.objects.create(date=date(2030, 10, 9), shift_type=EVENING, employee=self.mitchell)
+        swap = ShiftSwapRequest(shift=self.shift, requester=self.andy, colleague=self.mitchell)
+        self.assertTrue(any("aangrenzende" in i for i in swaps.preview_issues(swap)))

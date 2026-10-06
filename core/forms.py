@@ -107,3 +107,23 @@ class GroupForm(forms.ModelForm):
 
     def permission_rows(self):
         return grouped_permissions(self["permissions"])
+
+
+class NotificationPreferenceForm(forms.ModelForm):
+    class Meta:
+        from .models import NotificationPreference
+
+        model = NotificationPreference
+        exclude = ["user"]
+
+
+class CustomerAccountForm(forms.Form):
+    first_name = forms.CharField(label="Voornaam", max_length=150)
+    last_name = forms.CharField(label="Achternaam", max_length=150, required=False)
+    email = forms.EmailField(label="E-mailadres (wordt de gebruikersnaam)")
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].lower()
+        if User.objects.filter(username__iexact=email).exists():
+            raise forms.ValidationError("Er bestaat al een account met dit e-mailadres.")
+        return email

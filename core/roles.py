@@ -15,6 +15,9 @@ ROLES = {
 }
 
 
+SYSTEM_MODELS = {"auditlog", "jobrun", "notificationpreference", "userprofile"}
+
+
 def setup_roles():
     for name, spec in ROLES.items():
         group, _ = Group.objects.get_or_create(name=name)
@@ -36,5 +39,7 @@ def setup_roles():
         for full in spec.get("extra", []):
             app, codename = full.split(".")
             extra += list(Permission.objects.filter(content_type__app_label=app, codename=codename))
+        # Logregels en technische tabellen zijn nooit handmatig te bewerken.
+        perms = [p for p in perms if p.content_type.model not in SYSTEM_MODELS or p.codename.startswith("view_auditlog")]
         group.permissions.set(list(perms) + extra)
     return list(ROLES)

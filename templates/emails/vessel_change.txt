@@ -1,0 +1,17 @@
+{% autoescape off %}Hallo {{ user.first_name|default:user.username }},
+
+Container {{ shipment.container_number }} ({{ shipment.customer }}) is van schip gewisseld.
+
+  Oorspronkelijk schip: {{ shipment.original_vessel_name|default:"-" }}
+  Nu op:                {{ shipment.vessel_name }}{% if shipment.voyage %} (reis {{ shipment.voyage }}){% endif %}
+  ETA:                  {{ shipment.eta|date:"l j F H:i"|default:"onbekend" }}
+  Klantref / Cory ref:  {{ shipment.customer_reference|default:"-" }} / {{ shipment.cory_reference|default:"-" }}
+  Keurpunt:             {{ shipment.inspection_point|default:"-" }}
+
+{{ update.message }}
+
+Bekijk het dossier: {{ url }}
+
+-- 
+OPS/VET Portaal. Meldingen aanpassen: {{ base_url }}/beheer/mijn-meldingen/
+{% endautoescape %}

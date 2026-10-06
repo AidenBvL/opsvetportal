@@ -32,4 +32,5 @@
   <dt class="col-4">Keuring gepland</dt><dd class="col-8">{{ object.inspection_planned_at|date:"j F H:i"|default:"-" }}</dd>
 </dl>{% if object.notes %}<hr><div style="white-space:pre-wrap">{{ object.notes }}</div>{% endif %}</div></div></div>
 </div>
+<div class="mt-3">{% if perms.core.view_auditlog %}{% include "core/_history.html" %}{% endif %}</div>
 {% endblock %}

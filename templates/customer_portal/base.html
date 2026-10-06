@@ -1,0 +1,15 @@
+{% load static %}<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Klantportaal{% endblock %} · Cory Brothers</title>
+<link href="{% static 'vendor/bootstrap/bootstrap.min.css' %}" rel="stylesheet">
+<link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
+<link href="{% static 'css/portal.css' %}" rel="stylesheet"></head>
+<body>
+<nav class="navbar navbar-dark bg-portal px-3">
+  <a class="navbar-brand fw-semibold" href="{% url 'customer_portal:home' %}"><i class="bi bi-box-seam"></i> Cory Brothers · Klantportaal</a>
+  <span class="text-white small ms-auto me-3">{{ customer }}</span>
+  <a class="text-white small me-3" href="{% url 'password_change' %}">Wachtwoord</a>
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-light">Uitloggen</button></form>
+</nav>
+<main class="container py-4">{% block content %}{% endblock %}</main>
+</body></html>

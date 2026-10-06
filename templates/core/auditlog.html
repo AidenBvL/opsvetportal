@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Wijzigingslog{% endblock %}
+{% block content %}
+<h3>Wijzigingslog</h3>
+<form class="row g-2 mb-3">
+  <div class="col-md-3"><input class="form-control form-control-sm" name="q" value="{{ params.q }}" placeholder="Zoek op container, klant, titel…"></div>
+  <div class="col-md-3"><select name="soort" class="form-select form-select-sm" onchange="this.form.submit()"><option value="">Alle onderdelen</option>{% for pk, label in types %}<option value="{{ pk }}"{% if params.soort == pk|stringformat:"s" %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><select name="gebruiker" class="form-select form-select-sm" onchange="this.form.submit()"><option value="">Alle gebruikers</option>{% for u in users %}<option value="{{ u.pk }}"{% if params.gebruiker == u.pk|stringformat:"s" %} selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}</select></div>
+  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">Filter</button></div>
+</form>
+<div class="card"><table class="table table-sm mb-0"><thead class="table-light"><tr><th>Tijdstip</th><th>Gebruiker</th><th>Actie</th><th>Onderdeel</th><th>Object</th><th>Wijzigingen</th></tr></thead>
+{% for h in object_list %}<tr>
+  <td class="text-nowrap small">{{ h.timestamp|date:"d-m-Y H:i" }}</td><td>{% if h.user %}{{ h.user.get_full_name|default:h.user.username }}{% else %}systeem{% endif %}</td><td>{{ h.get_action_display }}</td>
+  <td class="small">{{ h.type_label|default:"-" }}</td><td>{{ h.object_repr }}</td>
+  <td class="small">{% if h.message %}{{ h.message }}<br>{% endif %}{% for field, change in h.changes.items %}<div><span class="text-muted">{{ field }}:</span> {{ change.0|default:"leeg" }} → <strong>{{ change.1|default:"leeg" }}</strong></div>{% endfor %}</td></tr>
+{% empty %}<tr><td colspan="6" class="text-muted text-center py-3">Nog geen wijzigingen.</td></tr>{% endfor %}
+</table></div>
+{% if is_paginated %}<nav class="mt-2"><ul class="pagination pagination-sm">{% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹</a></li>{% endif %}<li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ paginator.num_pages }}</span></li>{% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">›</a></li>{% endif %}</ul></nav>{% endif %}
+{% endblock %}

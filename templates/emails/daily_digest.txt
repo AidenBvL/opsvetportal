@@ -1,0 +1,24 @@
+{% autoescape off %}Goedemorgen {{ user.first_name|default:user.username }},
+
+Je overzicht voor {{ today|date:"l j F" }}:
+{% if overdue %}
+OVER DEADLINE
+{% for a in overdue %}  - {{ a.title }} (deadline {{ a.due_date|date:"j M" }}){% if a.customer %} - {{ a.customer }}{% endif %}
+{% endfor %}{% endif %}{% if due_today %}
+DEADLINE VANDAAG
+{% for a in due_today %}  - {{ a.title }}{% if a.customer %} - {{ a.customer }}{% endif %}
+{% endfor %}{% endif %}{% if arrivals %}
+AANKOMSTEN VANDAAG / MORGEN
+{% for s in arrivals %}  - {{ s.container_number }} {{ s.customer }} - ETA {{ s.eta|date:"D j/n H:i" }} - keuring: {{ s.get_inspection_status_display }}{% if s.vessel_changed %} - LET OP: schipwissel{% endif %}
+{% endfor %}{% endif %}{% if escalations %}
+OPEN ESCALATIES
+{% for a in escalations %}  - [niveau {{ a.escalation_level }}] {{ a.title }} ({{ a.owner|default:"geen eigenaar" }})
+{% endfor %}{% endif %}{% if questions %}
+OPEN OVERLEGVRAGEN VOOR JOU
+{% for q in questions %}  - {{ q.title }} ({{ q.meeting }})
+{% endfor %}{% endif %}
+Naar het portaal: {{ url }}
+
+-- 
+OPS/VET Portaal. Meldingen aanpassen: {{ base_url }}/beheer/mijn-meldingen/
+{% endautoescape %}

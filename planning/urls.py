@@ -16,6 +16,9 @@ urlpatterns = [
     path("export.xlsx", views.export_excel, name="export"),
     path("medewerkers/<int:pk>/", views.EmployeeAgendaView.as_view(), name="employee_detail"),
     path("ics/<uuid:token>.ics", views.ics_feed, name="ics"),
+    path("ruilen/", views.SwapListView.as_view(), name="swap_list"),
+    path("ruilen/dienst/<int:pk>/", views.SwapCreateView.as_view(), name="swap_create"),
+    path("ruilen/<int:pk>/", views.swap_action, name="swap_action"),
     *crud_urls(
         Employee, "planning", slug="medewerkers",
         fields=["name", "user", "job_title", "departments", "email", "phone", "wfh_days_per_week",

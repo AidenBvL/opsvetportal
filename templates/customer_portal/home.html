@@ -1,0 +1,16 @@
+{% extends "customer_portal/base.html" %}{% load portal %}
+{% block content %}
+<div class="d-flex align-items-center mb-3"><h3 class="mb-0">Uw zendingen</h3>
+<form class="ms-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Zoek container, referentie of B/L"></form></div>
+<div class="card mb-4"><div class="card-header">Onderweg en in behandeling ({{ sea_open|length }})</div><div class="table-responsive">
+<table class="table table-sm table-hover mb-0"><thead class="table-light"><tr><th>Container</th><th>Uw referentie</th><th>Onze referentie</th><th>B/L</th><th>Schip</th><th>ETA</th><th>Keuring</th><th>Status</th></tr></thead>
+{% for s in sea_open %}<tr><td><a href="{% url 'customer_portal:container' s.pk %}">{{ s.container_number }}</a></td><td>{{ s.customer_reference|default:"-" }}</td><td>{{ s.cory_reference|default:"-" }}</td><td>{{ s.bl_number|default:"-" }}</td>
+<td>{{ s.vessel_name|default:"-" }}{% if s.vessel_changed %} <span class="badge text-bg-warning">overgeladen</span>{% endif %}</td>
+<td>{% if s.ata %}aangekomen {{ s.ata|date:"j M H:i" }}{% else %}{{ s.eta|date:"D j M H:i"|default:"-" }}{% endif %}</td>
+<td>{% badge s.inspection_status s.get_inspection_status_display %}</td><td>{% badge s.status s.get_status_display %}</td></tr>
+{% empty %}<tr><td colspan="8" class="text-muted text-center py-3">Geen lopende zendingen.</td></tr>{% endfor %}</table></div></div>
+{% if road_open %}<div class="card mb-4"><div class="card-header">Wegtransport</div><table class="table table-sm mb-0"><thead class="table-light"><tr><th>Referentie</th><th>Container</th><th>Laden</th><th>Levering gepland</th><th>Losadres</th><th>Status</th></tr></thead>
+{% for r in road_open %}<tr><td>{{ r.customer_reference|default:r.cory_reference }}</td><td>{{ r.sea_shipment.container_number|default:"-" }}</td><td>{{ r.loading_at|date:"D j M H:i"|default:"-" }}</td><td>{{ r.delivery_planned_at|date:"D j M H:i"|default:"-" }}</td><td>{{ r.unloading_place }}</td><td>{% badge r.status r.get_status_display %}</td></tr>{% endfor %}</table></div>{% endif %}
+{% if sea_recent %}<div class="card"><div class="card-header">Recent afgerond</div><table class="table table-sm mb-0">{% for s in sea_recent %}<tr><td><a href="{% url 'customer_portal:container' s.pk %}">{{ s.container_number }}</a></td><td>{{ s.customer_reference }}</td><td>{% badge s.status s.get_status_display %}</td></tr>{% endfor %}</table></div>{% endif %}
+<p class="small text-muted mt-3">ETA's worden automatisch bijgewerkt via de rederij. Vragen? Neem contact op met uw contactpersoon bij Cory Brothers.</p>
+{% endblock %}

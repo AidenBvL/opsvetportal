@@ -8,6 +8,8 @@ app_name = "core"
 
 urlpatterns = [
     path("klanten/<int:pk>/", views.CustomerDetailView.as_view(), name="customer_detail"),
+    path("klanten/<int:pk>/klantaccount/", views.customer_account_create, name="customer_account_create"),
+    path("klanten/<int:pk>/klantaccount/<int:user_id>/", views.customer_account_action, name="customer_account_action"),
     *crud_urls(
         Customer, "core", slug="klanten",
         fields=["name", "code", "nationality", "vat_number", "eori_number", "street", "postal_code", "city", "country",
@@ -20,7 +22,8 @@ urlpatterns = [
     *crud_urls(
         ShippingLine, "core", slug="rederijen",
         fields=["name", "scac", "website", "contact_email", "contact_phone", "tracking_provider", "api_base_url",
-                "api_key_env", "api_key_header", "notes", "active"],
+                "api_key_env", "api_key_header", "oauth_token_url", "oauth_client_id_env", "oauth_client_secret_env",
+                "notes", "active"],
         list_display=["name", "scac", "tracking_provider", "contact_email", "contact_phone", "active"],
         search_fields=["name", "scac"],
     ),
@@ -43,4 +46,6 @@ urlpatterns = [
     path("accounts/<int:pk>/", views.UserUpdateView.as_view(), name="user_update"),
     path("rollen/nieuw/", views.GroupCreateView.as_view(), name="group_create"),
     path("rollen/<int:pk>/", views.GroupUpdateView.as_view(), name="group_update"),
+    path("wijzigingslog/", views.AuditLogView.as_view(), name="auditlog"),
+    path("mijn-meldingen/", views.NotificationPreferenceView.as_view(), name="notification_prefs"),
 ]

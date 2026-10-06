@@ -18,6 +18,10 @@ Het is gebouwd met Django 5.2 en draait op SQLite (lokaal) of PostgreSQL (produc
 | **Documenten** | Upload een B/L, arrival notice of CHED. Het portaal leest de tekst uit (tekstlaag van de PDF, of OCR met Tesseract) en herkent containers, zegels, het containertype, B/L, booking, schip en reis, ETA, POL/POD, CHED, klantreferentie, temperatuur en goederen. Daarna controleer je de gegevens en maak je de dossiers aan; bestaande dossiers worden aangevuld in plaats van dubbel aangemaakt. |
 | **Stamgegevens** | Klanten (naam, nationaliteit, adres, btw, EORI, contactpersoon, accountmanager, werkinstructies), rederijen (SCAC en API-instellingen), vervoerders en keurpunten (TRACES/BCP-code, openingstijden). |
 | **Accounts & rechten** | Accounts aanmaken, rollen toewijzen (Beheerder, Planner, Operations, Alleen lezen) en per account extra rechten aanvinken in een rechtenmatrix (bekijken / toevoegen / wijzigen / verwijderen per onderdeel). Een account koppel je aan een medewerker. |
+| **Ruilverzoeken** | Een medewerker vraagt een collega om een dienst over te nemen (of te ruilen tegen een dienst van die collega). De collega accepteert, een planner keurt goed, en daarna wordt het rooster automatisch aangepast. De planner ziet vooraf of de ruil een spelregel overtreedt. Bij elke stap gaat er een e-mail uit. |
+| **E-mailmeldingen** | Elke gebruiker kiest zelf welke mails hij krijgt (*Mijn e-mailmeldingen*): schipwissel, ETA verschoven (vanaf X uur), actie toegewezen, escalaties, een dagoverzicht in de ochtend en een herinnering de dag vóór een dienst. Zendingmeldingen kunnen voor *eigen dossiers* of *alle dossiers*. |
+| **Klantportaal** | Je maakt vanaf de klantpagina klantaccounts aan. De klant krijgt een link om zelf een wachtwoord in te stellen, en ziet alleen eigen containers, ETA's, schipwissels, keuringsstatus en transporten. Kosten, acties, notities en de rest van het portaal blijven afgeschermd. |
+| **Wijzigingslog** | Van elke wijziging wordt vastgelegd wie wat wanneer heeft aangepast (oude → nieuwe waarde). Dit is per dossier te zien (klant, container, transport, actie) en in een totaaloverzicht met filters. Automatische wijzigingen, zoals tracking, staan erin als "systeem". |
 | **Zoeken** | De zoekbalk bovenin zoekt op container, referentie, B/L, CHED, schip, kenteken of klant. |
 
 ## Spelregels van de roostergenerator
@@ -64,18 +68,34 @@ docker compose exec web python manage.py seed_portal
 docker compose exec web python manage.py createsuperuser
 ```
 
-De `tracking`-service ververst elke 30 minuten de ETA's. Plan ook een maandelijkse cronjob voor
-`generate_roster`.
+De `scheduler`-service ververst elke 30 minuten de ETA's en verstuurt om `DAILY_DIGEST_TIME` het
+dagoverzicht en de dienstherinneringen. Zonder Docker gebruik je cron voor `refresh_tracking` en
+`send_daily_mails`. Stel voor de e-mails de SMTP-gegevens en `PORTAL_BASE_URL` in (zie `.env.example`).
 
-## ETA en zeeschip via API
+## ETA en zeeschip via API (gratis)
 
-Per rederij stel je onder *Stamgegevens → Rederijen* een tracking provider in:
+De gratis route loopt rechtstreeks via de API's van de rederijen. Bijna alle grote rederijen
+gebruiken dezelfde DCSA Track & Trace-standaard, die het portaal al ondersteunt. Per rederij maak je
+een (gratis) developer-account aan en vul je de gegevens in bij *Stamgegevens → Rederijen*:
+
+| Rederij | Waar aanvragen | Wat je invult |
+|---|---|---|
+| Maersk (ook Hamburg Süd) | developer.maersk.com, self-service | API base URL, `Consumer-Key` (env var) + OAuth2 token-URL, client-ID en client-secret (env vars) |
+| Hapag-Lloyd | api-portal.hlag.com, self-service (bèta) | API base URL + API-sleutel (env var) |
+| CMA CGM (ook APL/ANL) | api-portal.cma-cgm.com | API base URL + publieke API-sleutel, of OAuth2 voor de private API |
+| MSC, ONE, Evergreen, COSCO, ZIM | via de accountmanager / het developerportaal van de rederij | afhankelijk van de rederij: API-sleutel of OAuth2 |
+
+Zet de sleutels zelf **niet** in de database maar in omgevingsvariabelen (bijv. `MAERSK_API_KEY`),
+en vul in het portaal alleen de *naam* van die variabele in.
+
+Per rederij stel je een tracking provider in:
 
 - **`mock`**: demodata met kleine ETA-verschuivingen en af en toe een schipwissel, om het portaal te testen zonder API-sleutels.
 - **`dcsa`**: de [DCSA Track & Trace](https://dcsa.org/standards/track-and-trace/) REST-standaard (v2.2 en v3). Die wordt ondersteund door onder andere Maersk, Hapag-Lloyd, CMA CGM, ONE, Evergreen en ZIM. Vul de API base URL in, en de naam van de omgevingsvariabele waarin de API-sleutel staat (de sleutel zelf komt niet in de database).
 - **`none`**: geen automatische tracking voor deze rederij.
 
-Wil je een andere bron toevoegen, zoals Portbase, Vizion, Terminal49 of ShipsGo? Schrijf dan een klasse
+Een rederij zonder eigen API kun je later via een betaalde aggregator (bijv. ShipsGo of Vizion) of
+via Portbase toevoegen. Wil je een andere bron toevoegen, zoals Portbase, Vizion, Terminal49 of ShipsGo? Schrijf dan een klasse
 in `shipments/tracking/` die `track(shipment)` implementeert, en registreer die in `PROVIDERS`.
 
 ## Projectstructuur
@@ -88,4 +108,5 @@ meetings/    dagelijkse overleggen (ochtend / middag / einde dag)
 actions/     acties, escalaties, extra kosten
 shipments/   zeevracht, wegtransport, tracking providers
 documents/   upload + tekstherkenning (parser.py)
+customer_portal/  afgeschermd klantportaal
 ```

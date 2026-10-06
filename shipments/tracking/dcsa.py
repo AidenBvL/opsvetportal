@@ -97,6 +97,35 @@ def parse_events(events, port_of_discharge=""):
     return result
 
 
+def oauth_token(line):
+    """Haal (en cache) een OAuth2 access token op via client credentials."""
+    from django.core.cache import cache
+
+    cache_key = f"tracking-token-{line.pk}"
+    token = cache.get(cache_key)
+    if token:
+        return token
+    client_id = os.environ.get(line.oauth_client_id_env or "")
+    secret = os.environ.get(line.oauth_client_secret_env or "")
+    if not client_id or not secret:
+        raise TrackingError("OAuth2 client-ID of -secret ontbreekt (controleer de omgevingsvariabelen).")
+    try:
+        response = requests.post(
+            line.oauth_token_url,
+            data={"grant_type": "client_credentials", "client_id": client_id, "client_secret": secret},
+            headers={"Accept": "application/json", **({line.api_key_header or "Consumer-Key": client_id} if line.api_key_header else {})},
+            timeout=settings.TRACKING_HTTP_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        raise TrackingError(f"Token ophalen bij {line.name} mislukt: {exc}") from exc
+    if response.status_code >= 400:
+        raise TrackingError(f"Token ophalen mislukt ({response.status_code}): {response.text[:200]}")
+    data = response.json()
+    token = data["access_token"]
+    cache.set(cache_key, token, max(int(data.get("expires_in", 3600)) - 60, 60))
+    return token
+
+
 class DCSAProvider(BaseProvider):
     name = "dcsa"
 
@@ -110,6 +139,8 @@ class DCSAProvider(BaseProvider):
             if not key:
                 raise TrackingError(f"Omgevingsvariabele {line.api_key_env} met de API-sleutel is niet gezet.")
             headers[line.api_key_header or "Consumer-Key"] = key
+        if line.oauth_token_url:
+            headers["Authorization"] = f"Bearer {oauth_token(line)}"
         params = {"equipmentReference": shipment.container_number, "eventType": "TRANSPORT"}
         if shipment.bl_number:
             params["transportDocumentReference"] = shipment.bl_number

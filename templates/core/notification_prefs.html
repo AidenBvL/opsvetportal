@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Mijn meldingen{% endblock %}
+{% block content %}
+<h3>Mijn e-mailmeldingen</h3>
+<p class="text-muted">Meldingen gaan naar <strong>{{ user.email|default:"(geen e-mailadres ingesteld - vraag een beheerder dit toe te voegen)" }}</strong>.</p>
+<div class="card" style="max-width:720px"><div class="card-body">
+<form method="post">{% csrf_token %}{% include "core/_form_fields.html" %}<button class="btn btn-primary">Opslaan</button></form>
+</div></div>
+{% endblock %}

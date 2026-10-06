@@ -117,6 +117,9 @@ def generate_month(year, month, user=None, force=False):
     roster.generated_by = user if user and user.is_authenticated else None
     roster.notes = "\n".join(result.warnings)
     roster.save()
+    from core.audit import log_event
+
+    log_event(roster, f"Rooster {month:02d}-{year} automatisch gegenereerd", user=roster.generated_by)
     return roster, result
 
 

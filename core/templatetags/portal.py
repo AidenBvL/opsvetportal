@@ -70,6 +70,8 @@ STATUS_COLORS = {
     "aan_te_melden": "danger", "aangemeld": "info", "documentair": "info", "in_keuring": "warning",
     "vrijgegeven": "success", "afgekeurd": "danger", "n.v.t.": "light",
     "klant": "info", "cory": "danger", "vervoerder": "warning", "overmacht": "secondary",
+    "wacht_collega": "warning", "wacht_planner": "info", "goedgekeurd": "success", "geweigerd": "secondary",
+    "afgewezen": "danger", "ingetrokken": "light",
 }  # fmt: skip
 
 

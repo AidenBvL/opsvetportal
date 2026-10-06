@@ -168,3 +168,27 @@ class ShipmentViewTests(TestCase):
         self.assertEqual(self.client.get("/zendingen/zeevracht/").status_code, 200)
         self.assertEqual(self.client.get("/zendingen/zeevracht/nieuw/").status_code, 403)
         self.assertEqual(self.client.get("/beheer/klanten/").status_code, 403)
+
+
+class OAuthProviderTests(TestCase):
+    def test_bearer_token_is_fetched_and_cached(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        customer = Customer.objects.create(name="K")
+        line = ShippingLine.objects.create(
+            name="Maersk", scac="MAEU", tracking_provider="dcsa", api_base_url="https://api.example.com/tnt",
+            oauth_token_url="https://api.example.com/oauth/token", oauth_client_id_env="T_ID", oauth_client_secret_env="T_SECRET",
+            api_key_env="T_ID",
+        )
+        shipment = SeaShipment.objects.create(customer=customer, shipping_line=line, container_number="CSQU3054383")
+        token_response = mock.Mock(status_code=200, json=lambda: {"access_token": "abc", "expires_in": 3600})
+        events_response = mock.Mock(status_code=200, json=lambda: [])
+        with mock.patch.dict("os.environ", {"T_ID": "id", "T_SECRET": "secret"}), \
+                mock.patch("shipments.tracking.dcsa.requests.post", return_value=token_response) as post, \
+                mock.patch("shipments.tracking.dcsa.requests.get", return_value=events_response) as get:
+            refresh_shipment(shipment)
+            refresh_shipment(shipment)
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(get.call_args.kwargs["headers"]["Authorization"], "Bearer abc")
+        self.assertEqual(get.call_args.kwargs["headers"]["Consumer-Key"], "id")

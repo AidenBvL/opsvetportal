@@ -20,7 +20,7 @@ class WeekdaysField(models.CharField):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("max_length", 20)
         kwargs.setdefault("blank", True)
-        kwargs.setdefault("default", "")
+        kwargs.setdefault("default", set)
         super().__init__(*args, **kwargs)
 
     def from_db_value(self, value, expression, connection):

@@ -1,0 +1,9 @@
+{% autoescape off %}Hallo {{ user.first_name|default:user.username }},
+
+Herinnering: je hebt morgen ({{ shift.date|date:"l j F" }}) de {{ shift.get_shift_type_display|lower }}.{% if shift.linked_to_wfh %} Je werkt die dag thuis.{% endif %}
+
+Kun je niet? Vraag een ruil aan in het portaal: {{ url }}
+
+-- 
+OPS/VET Portaal. Meldingen aanpassen: {{ base_url }}/beheer/mijn-meldingen/
+{% endautoescape %}

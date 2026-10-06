@@ -5,6 +5,8 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views import generic
+
+from core.audit import history_for
 from django.views.decorators.http import require_POST
 
 from core.crud import CrudCreateView, CrudListView, CrudUpdateView
@@ -56,6 +58,7 @@ class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
             "road": s.road_transports.select_related("carrier"),
             "documents": s.documents.all(),
             "meeting_items": s.meeting_items.select_related("meeting")[:10],
+            "history": history_for(s),
         })
         return context
 
@@ -154,6 +157,9 @@ class RoadDetailView(PermissionRequiredMixin, generic.DetailView):
     permission_required = "shipments.view_roadtransport"
     model = RoadTransport
     template_name = "shipments/road_detail.html"
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(history=history_for(self.object), **kwargs)
 
 
 class RoadCreateView(CrudCreateView):

@@ -1,0 +1,16 @@
+{% autoescape off %}Hallo {{ user.first_name|default:user.username }},
+
+Escalatie op niveau {{ action.get_escalation_level_display }}:
+
+  {{ action.title }}
+  Eigenaar: {{ action.owner|default:"nog niemand" }}
+{% if action.customer %}  Klant:    {{ action.customer }}
+{% endif %}{% if action.escalated_to %}  Geëscaleerd naar: {{ action.escalated_to }}
+{% endif %}
+{{ action.description }}
+
+Openen: {{ url }}
+
+-- 
+OPS/VET Portaal. Meldingen aanpassen: {{ base_url }}/beheer/mijn-meldingen/
+{% endautoescape %}
