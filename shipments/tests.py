@@ -342,3 +342,18 @@ class Terminal49ErrorMessageTests(TestCase):
             update = refresh_shipment(shipment)
         self.assertIn("401 bij GET /tracking_requests/abc", update.message)
         self.assertIn("Invalid token", update.message)
+
+
+@override_settings(TERMINAL49_API_KEY="test-key")
+class Terminal49FreePlanTests(TestCase):
+    def test_free_plan_message(self):
+        customer = Customer.objects.create(name="K")
+        line = ShippingLine.objects.create(name="CMA CGM", scac="CMDU", tracking_provider="terminal49")
+        shipment = SeaShipment.objects.create(customer=customer, shipping_line=line, container_number="CSQU3054383",
+                                              external_tracking_id="tr:abc")
+        detail = "You do not have permissions for using the API, except for creating tracking requests. All other permissions require a paid plan."
+        resp = mock.Mock(status_code=401, json=lambda: {"errors": [{"detail": detail}]}, text="")
+        with mock.patch("shipments.tracking.terminal49.requests.request", return_value=resp):
+            update = refresh_shipment(shipment)
+        self.assertIn("gratis plan", update.message)
+        self.assertNotIn("ongeldig", update.message)

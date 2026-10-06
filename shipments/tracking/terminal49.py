@@ -56,6 +56,9 @@ class Terminal49Provider(BaseProvider):
                 pass
             detail = "; ".join(e.get("detail") or e.get("title", "") for e in errors if isinstance(e, dict)) or response.text[:150]
             where = f"{method} {path.split('?')[0]}"
+            if response.status_code in (401, 403) and "paid plan" in detail.lower():
+                raise TrackingError(f"Terminal49: je gratis plan staat alleen het aanmelden van zendingen toe; ETA en schip "
+                                    f"uitlezen via de API vereist een betaald plan (bij {where}).")
             if response.status_code == 401:
                 raise TrackingError(f"Terminal49 401 bij {where}: API-sleutel ongeldig of verwijderd. "
                                     f"Controleer TERMINAL49_API_KEY in Render. ({detail})"[:300])
