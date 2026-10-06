@@ -442,3 +442,73 @@ class SafecubeTests(TestCase):
         with mock.patch("shipments.tracking.safecube.requests.get") as get:
             refresh_all()
         get.assert_not_called()
+
+
+class PasteAndQuickUpdateTests(TestCase):
+    def setUp(self):
+        from pathlib import Path
+
+        self.text = (Path(__file__).parent / "testdata" / "cma_cgm_tracking.txt").read_text()
+        self.client.force_login(User.objects.create_superuser("admin", "a@example.com", "pw"))
+        customer = Customer.objects.create(name="EUROFOODLINK")
+        line = ShippingLine.objects.create(name="CMA CGM", scac="CMDU", tracking_provider="none",
+                                           tracking_url_template="https://www.cma-cgm.com/ebusiness/tracking/search")
+        self.shipment = SeaShipment.objects.create(customer=customer, shipping_line=line, container_number="SZLU5121564",
+                                                   bl_number="QGD3466869", vessel_name="COSCO GEMINI")
+
+    def test_parse_cma_cgm_page(self):
+        from .paste import parse_tracking_text
+
+        r = parse_tracking_text(self.text)
+        local = timezone.localtime(r.eta)
+        self.assertEqual((local.day, local.month, local.hour), (3, 11, 8))
+        self.assertEqual((r.vessel_name, r.voyage), ("COSCO SHIPPING GEMINI", "0FAO2E1MA"))
+        self.assertEqual(r.port_of_loading, "Qingdao")
+        self.assertEqual(r.terminal, "ECT EUROMAX ROTTERDAM")
+        self.assertIsNone(r.ata)
+        self.assertEqual(timezone.localtime(r.departed_at).day, 24)
+        self.assertIsNone(parse_tracking_text("geen bruikbare tekst"))
+
+    def test_paste_view_updates_shipment(self):
+        r = self.client.post(f"/zendingen/zeevracht/{self.shipment.pk}/plakken/", {"text": self.text})
+        self.assertEqual(r.status_code, 302)
+        self.shipment.refresh_from_db()
+        self.assertEqual(self.shipment.voyage, "0FAO2E1MA")
+        self.assertEqual(self.shipment.terminal, "ECT EUROMAX ROTTERDAM")
+        self.assertFalse(self.shipment.vessel_changed)
+        self.assertIsNotNone(self.shipment.departed_at)
+        self.assertEqual(self.shipment.tracking_updates.get().provider, "geplakt")
+        self.assertIsNotNone(self.shipment.voyage_progress)
+
+    def test_quick_update_and_detail_page(self):
+        url = f"/zendingen/zeevracht/{self.shipment.pk}/"
+        self.client.post(url + "snel/", {"inspection_status": "aangemeld"})
+        self.client.post(url + "snel/", {"customs_cleared": "1"})
+        self.shipment.refresh_from_db()
+        self.assertEqual(self.shipment.inspection_status, "aangemeld")
+        self.assertTrue(self.shipment.customs_cleared)
+        page = self.client.get(url)
+        self.assertContains(page, "Bekijk bij rederij")
+        self.assertContains(page, "Plak tracking")
+
+    def test_list_views_and_csv(self):
+        self.shipment.eta = timezone.now() + timedelta(days=2)
+        self.shipment.save()
+        page = self.client.get("/zendingen/zeevracht/?weergave=week")
+        self.assertContains(page, "SZLU")
+        self.assertEqual([v["count"] for v in page.context["views"] if v["key"] == "ched"], [1])
+        csv = self.client.get("/zendingen/zeevracht/?weergave=alle&export=csv")
+        self.assertIn("SZLU5121564", csv.content.decode())
+        self.assertNotContains(self.client.get("/zendingen/zeevracht/?weergave=gewisseld"), "SZLU5121564")
+
+
+class VesselImoTests(TestCase):
+    def test_imo_cleared_on_vessel_change_without_imo(self):
+        from .tracking.service import apply_result
+
+        customer = Customer.objects.create(name="K")
+        s = SeaShipment.objects.create(customer=customer, container_number="CSQU3054383", vessel_name="MAERSK HIDALGO", vessel_imo="9786786")
+        apply_result(s, TrackingResult(provider="geplakt", vessel_name="COSCO SHIPPING GEMINI"))
+        s.refresh_from_db()
+        self.assertTrue(s.vessel_changed)
+        self.assertEqual(s.vessel_imo, "")

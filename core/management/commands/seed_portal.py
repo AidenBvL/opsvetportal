@@ -52,8 +52,11 @@ class Command(BaseCommand):
                           "no_shift_weekdays": no_shift, "preferred_wfh_weekdays": pref},
             )
             employee.departments.set([departments[g] for g in groups])
+        from importlib import import_module
+
+        urls = import_module("core.migrations.0008_tracking_urls").URLS
         for name, scac in SHIPPING_LINES:
-            ShippingLine.objects.get_or_create(name=name, defaults={"scac": scac})
+            ShippingLine.objects.get_or_create(name=name, defaults={"scac": scac, "tracking_url_template": urls.get(scac, "")})
         call_command("seed_holidays", stdout=self.stdout)
         self.stdout.write(self.style.SUCCESS("Basisgegevens geladen."))
         if options["demo"]:

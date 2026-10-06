@@ -16,6 +16,14 @@ class ActionForm(forms.ModelForm):
             "resolution": forms.Textarea(attrs={"rows": 3}),
         }
 
+    sections = [
+        ("Wat moet er gebeuren", "check2-square", ["title", "kind", "description"]),
+        ("Wie en wanneer", "person", ["owner", "due_date", "priority", "status"]),
+        ("Escalatie", "exclamation-triangle", ["escalation_level", "escalated_to"]),
+        ("Gekoppeld aan", "link-45deg", ["customer", "sea_shipment", "road_transport"]),
+        ("Afhandeling", "flag", ["resolution"]),
+    ]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["owner"].queryset = Employee.objects.filter(active=True)

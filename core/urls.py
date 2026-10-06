@@ -21,7 +21,7 @@ urlpatterns = [
     ),
     *crud_urls(
         ShippingLine, "core", slug="rederijen",
-        fields=["name", "scac", "website", "contact_email", "contact_phone", "tracking_provider", "api_base_url",
+        fields=["name", "scac", "website", "tracking_url_template", "contact_email", "contact_phone", "tracking_provider", "api_base_url",
                 "api_key_env", "api_key_header", "oauth_token_url", "oauth_client_id_env", "oauth_client_secret_env",
                 "notes", "active"],
         list_display=["name", "scac", "tracking_provider", "contact_email", "contact_phone", "active"],

@@ -1,10 +1,10 @@
 {% extends "base.html" %}{% load portal %}
 {% block title %}Acties & escalaties{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <h3 class="mb-0">Acties & escalaties</h3>
+<div class="page-head">
+  <div><div class="eyebrow">Dagelijks</div><h3>Acties & escalaties</h3></div>
   <a class="btn btn-sm btn-link" href="{% url 'actions:action_list' %}">lijstweergave</a>
-  <div class="ms-auto">
+  <div class="page-actions">
     {% if perms.actions.add_action %}
     <a class="btn btn-sm btn-primary" href="{% url 'actions:action_create' %}"><i class="bi bi-plus"></i> Actie</a>
     <a class="btn btn-sm btn-danger" href="{% url 'actions:action_create' %}?kind=escalatie&priority=3"><i class="bi bi-exclamation-triangle"></i> Escalatie</a>{% endif %}

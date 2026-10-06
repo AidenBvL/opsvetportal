@@ -140,5 +140,6 @@ def parse_shipment(data, container_number=""):
         raw={"metadata": data.get("metadata"), "route": route},
         discharged_at=_dt(discharge.get("date")) if discharge else None,
         port_of_loading=pol_location.get("name", ""),
+        departed_at=_dt(pol.get("date")) if pol.get("actual") else None,
         terminal=terminal,
     )

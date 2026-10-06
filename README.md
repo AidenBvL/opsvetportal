@@ -24,6 +24,16 @@ Het is gebouwd met Django 5.2 en draait op SQLite (lokaal) of PostgreSQL (produc
 | **Wijzigingslog** | Van elke wijziging wordt vastgelegd wie wat wanneer heeft aangepast (oude → nieuwe waarde). Dit is per dossier te zien (klant, container, transport, actie) en in een totaaloverzicht met filters. Automatische wijzigingen, zoals tracking, staan erin als "systeem". |
 | **Zoeken** | De zoekbalk bovenin zoekt op container, referentie, B/L, CHED, schip, kenteken of klant. |
 
+## Werken met het portaal
+
+- **Zoeken:** druk op `/` (of Ctrl+K) en zoek op container, B/L, referentie, CHED, schip of klant.
+- **Nieuw:** de knop **+ Nieuw** rechtsboven maakt een container, transport, actie of klant aan, vanaf elke pagina.
+- **Voor jou:** het belletje toont je open acties, ruilverzoeken en overlegvragen; het menu toont tellers voor CHED's en escalaties.
+- **Thema:** licht of donker via het maan-icoon; het menu klap je in onderaan de zijbalk.
+- **Zeevracht:** filterpillen (aankomst ≤ 7 dagen, keuring lopend, CHED aanmelden, schipwissels, vrije dagen bijna op), sorteerbare kolommen en export naar CSV.
+- **Containerdossier:** reisvoortgang van laadhaven naar Rotterdam, aftellen tot de ETA en de vrije dagen, snel de status, keuring en douane bijwerken, en de knop **Bekijk bij rederij**.
+- **Plak tracking:** kopieer de trackingpagina van de rederij (Ctrl+A, Ctrl+C) en plak die in het dossier. Het portaal haalt schip, reis, ETA, laadhaven, terminal en vertrekdatum eruit en meldt een schipwissel. Werkt zonder API of abonnement.
+
 ## Spelregels van de roostergenerator
 
 De regels komen uit het oude Excel-rooster en zijn per medewerker in te stellen onder *Medewerkers*:

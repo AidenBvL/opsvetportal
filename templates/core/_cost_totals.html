@@ -1,7 +1,7 @@
 {% load portal %}
 <div class="row g-2">
 {% for t in cost_totals %}
-  <div class="col-6 col-xxl-3"><div class="border rounded p-2 bg-white">
+  <div class="col-6"><div class="border rounded p-2 bg-white">
     <div class="small text-muted">{% badge t.key t.label %}</div>
     <div class="fw-bold text-nowrap">{{ t.total|euro }}</div>
   </div></div>

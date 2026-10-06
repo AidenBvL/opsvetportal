@@ -31,6 +31,7 @@ class TrackingResult:
     discharged_at: datetime | None = None
     last_free_day: date | None = None  # laatste vrije dag (demurrage)
     port_of_loading: str = ""
+    departed_at: datetime | None = None
     terminal: str = ""
 
     @property

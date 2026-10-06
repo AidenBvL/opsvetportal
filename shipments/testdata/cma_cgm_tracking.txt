@@ -1,0 +1,39 @@
+Track my Shipment
+Search by Container Number, Shipment Ref or My Ref*
+QGD3466869
+Tracking details
+Vessel Departure
+Container SZLU5121564
+45R1 (40RH) 
+New search
+Export PDF
+POL
+QINGDAO (CN)
+POD
+ROTTERDAM (NL)
+ETA Berth at POD
+Tue 03-NOV-2026
+08:00 AM
+
+27 days Remaining
+
+Booking reference
+QGD3466869
+Date
+Moves
+LocationTerminal
+Vessel (Voyage)
+Display Previous Moves
+Thursday, 24-SEP-2026
+04:00 PM
+Vessel Departure	
+QINGDAO
+QINGDAO QIANWAN CONTAINER TERMINAL
+COSCO SHIPPING GEMINI ( 0FAO1W1MA)
+Tuesday, 03-NOV-2026
+08:00 AM
+Planned Vessel Arrival	
+ROTTERDAM
+ECT EUROMAX ROTTERDAM
+COSCO SHIPPING GEMINI ( 0FAO2E1MA)
+Times reflected are local Times

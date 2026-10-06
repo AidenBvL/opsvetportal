@@ -61,6 +61,10 @@ class ShippingLine(TimeStampedModel):
     name = models.CharField("rederij", max_length=150, unique=True)
     scac = models.CharField("SCAC-code", max_length=4, blank=True, help_text="Bijv. MAEU, MSCU, CMDU, HLCU.")
     website = models.URLField("website", blank=True)
+    tracking_url_template = models.CharField(
+        "link naar trackingpagina", max_length=300, blank=True,
+        help_text="Bijv. https://www.rederij.com/track?ref={number}. {container} = containernummer, {number} = B/L of boeking.",
+    )
     contact_email = models.EmailField("contact e-mail", blank=True)
     contact_phone = models.CharField("contact telefoon", max_length=50, blank=True)
     tracking_provider = models.CharField("tracking provider", max_length=20, choices=PROVIDER_CHOICES, blank=True)

@@ -18,16 +18,27 @@ class SeaShipmentForm(forms.ModelForm):
         fields = [
             "customer", "customer_reference", "cory_reference", "container_number", "container_type", "seal_number",
             "shipping_line", "bl_number", "booking_number", "vessel_name", "voyage", "port_of_loading",
-            "port_of_discharge", "terminal", "eta", "ata", "free_time_until", "inspection_required", "inspection_point",
+            "port_of_discharge", "terminal", "departed_at", "eta", "ata", "free_time_until", "inspection_required", "inspection_point",
             "ched_number", "inspection_status", "inspection_planned_at", "customs_cleared", "goods_description",
             "temperature_setpoint", "gross_weight_kg", "packages", "status", "handler", "tracking_enabled", "notes",
         ]
         widgets = {
-            **_dt(["eta", "ata", "inspection_planned_at"]),
+            **_dt(["departed_at", "eta", "ata", "inspection_planned_at"]),
             "free_time_until": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
         help_texts = {"vessel_name": "Wordt automatisch bijgewerkt via tracking.", "eta": "Wordt automatisch bijgewerkt via tracking."}
+
+    sections = [
+        ("Klant & referenties", "building", ["customer", "customer_reference", "cory_reference", "handler", "status"]),
+        ("Container", "box", ["container_number", "container_type", "seal_number", "bl_number", "booking_number"]),
+        ("Reis", "water", ["shipping_line", "vessel_name", "voyage", "port_of_loading", "port_of_discharge", "terminal",
+                           "departed_at", "eta", "ata", "free_time_until", "tracking_enabled"]),
+        ("Keuring & douane", "clipboard2-check", ["inspection_required", "inspection_point", "ched_number", "inspection_status",
+                                                 "inspection_planned_at", "customs_cleared"]),
+        ("Lading", "thermometer-snow", ["goods_description", "temperature_setpoint", "gross_weight_kg", "packages"]),
+        ("Opmerkingen", "chat-left-text", ["notes"]),
+    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -56,6 +67,15 @@ class RoadTransportForm(forms.ModelForm):
             **_dt(["loading_at", "delivery_planned_at", "delivered_at", "inspection_planned_at"]),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
+
+    sections = [
+        ("Klant & referenties", "building", ["customer", "customer_reference", "cory_reference", "direction", "sea_shipment", "handler", "status"]),
+        ("Vervoerder", "truck", ["carrier", "truck_plate", "trailer_plate", "driver_name", "driver_phone", "cmr_number"]),
+        ("Planning", "calendar-event", ["loading_place", "loading_at", "unloading_place", "delivery_planned_at", "delivered_at"]),
+        ("Keuring", "clipboard2-check", ["inspection_required", "inspection_point", "ched_number", "inspection_status", "inspection_planned_at"]),
+        ("Lading", "thermometer-snow", ["goods_description", "temperature_setpoint", "pallets", "gross_weight_kg"]),
+        ("Opmerkingen", "chat-left-text", ["notes"]),
+    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

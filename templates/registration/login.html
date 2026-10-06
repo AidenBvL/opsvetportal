@@ -1,17 +1,32 @@
 {% extends "base.html" %}
 {% block title %}Inloggen{% endblock %}
 {% block anonymous %}
-<div class="container" style="max-width:380px;margin-top:12vh">
-  <div class="card p-4">
-    <h4 class="mb-3"><i class="bi bi-box-seam"></i> OPS/VET Portaal</h4>
-    <form method="post">{% csrf_token %}
-      {% if form.errors %}<div class="alert alert-danger py-2">Onjuiste gebruikersnaam of wachtwoord.</div>{% endif %}
-      <div class="mb-2"><label class="form-label">Gebruikersnaam</label><input class="form-control" name="username" autofocus required></div>
-      <div class="mb-3"><label class="form-label">Wachtwoord</label><input class="form-control" type="password" name="password" required></div>
-      <input type="hidden" name="next" value="{{ next }}">
-      <button class="btn btn-primary w-100">Inloggen</button>
-      <a class="small d-block mt-2 text-center" href="{% url 'password_reset' %}">Wachtwoord vergeten?</a>
-    </form>
+<div class="auth-wrap">
+  <div class="auth-art">
+    <div class="d-flex align-items-center gap-2"><span class="app-brand-mark"><i class="bi bi-box-seam"></i></span><strong class="text-white">OPS/VET Portaal</strong></div>
+    <div>
+      <h2>Containers, keuringen en planning op één plek.</h2>
+      <div class="stack mt-4">
+        <div><i class="bi bi-water"></i> ETA's en schipwissels per container</div>
+        <div><i class="bi bi-clipboard2-check"></i> Keuringsstatus en CHED in één overzicht</div>
+        <div><i class="bi bi-calendar3"></i> Rooster, overleggen en acties voor het team</div>
+      </div>
+    </div>
+    <div class="small" style="color:#7f9aa7">Cory Brothers · Fresh & Frozen</div>
+  </div>
+  <div class="auth-form">
+    <div class="auth-card">
+      <h3 class="mb-1">Inloggen</h3>
+      <p class="text-body-secondary mb-4">Gebruik je portaalaccount.</p>
+      <form method="post">{% csrf_token %}
+        {% if form.errors %}<div class="alert alert-danger py-2">Onjuiste gebruikersnaam of wachtwoord.</div>{% endif %}
+        <div class="mb-3"><label class="form-label small fw-semibold" for="id_username">Gebruikersnaam</label><input class="form-control form-control-lg" id="id_username" name="username" autocomplete="username" autofocus required></div>
+        <div class="mb-2"><label class="form-label small fw-semibold" for="id_password">Wachtwoord</label><input class="form-control form-control-lg" type="password" id="id_password" name="password" autocomplete="current-password" required></div>
+        <div class="mb-4 text-end"><a class="small" href="{% url 'password_reset' %}">Wachtwoord vergeten?</a></div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button class="btn btn-primary btn-lg w-100">Inloggen</button>
+      </form>
+    </div>
   </div>
 </div>
 {% endblock %}

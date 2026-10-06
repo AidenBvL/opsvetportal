@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block anonymous %}
-<div class="container" style="max-width:440px;margin-top:10vh"><div class="card p-4">
-<h4 class="mb-3"><i class="bi bi-box-seam"></i> OPS/VET Portaal</h4>
-{% block auth %}{% endblock %}
-</div></div>
+<div class="auth-form" style="min-height:100vh">
+  <div class="auth-card card p-4">
+    <div class="d-flex align-items-center gap-2 mb-3"><span class="app-brand-mark"><i class="bi bi-box-seam"></i></span><strong>OPS/VET Portaal</strong></div>
+    {% block auth %}{% endblock %}
+  </div>
+</div>
 {% endblock %}
-{% block content %}<div style="max-width:500px">{% block auth_in %}{% endblock %}</div>{% endblock %}
+{% block content %}<div class="card p-4" style="max-width:520px">{% block auth_in %}{% endblock %}</div>{% endblock %}

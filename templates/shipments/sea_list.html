@@ -1,22 +1,68 @@
-{% extends "core/generic_list.html" %}{% load portal %}
-{% block list_actions %}
-<ul class="nav nav-pills nav-sm ms-3">
-  {% for key, label in "open:Open,gewisseld:Schipwissels,keuring:Keuring lopend,alle:Alle"|split_pairs %}
-  <li class="nav-item"><a class="nav-link py-1{% if view == key %} active{% endif %}" href="?weergave={{ key }}">{{ label }}</a></li>{% endfor %}
-</ul>
-{% if perms.shipments.refresh_tracking %}<form method="post" action="{% url 'shipments:sea_refresh_all' %}" class="ms-2">{% csrf_token %}<button class="btn btn-sm btn-outline-primary" title="Haal ETA/schip op voor alle open containers"><i class="bi bi-arrow-repeat"></i> Ververs ETA's</button></form>{% endif %}
-{% if perms.shipments.add_seashipment %}<a class="btn btn-sm btn-outline-primary ms-2" href="{% url 'shipments:sea_bulk' %}">Meerdere containers</a>
-<a class="btn btn-sm btn-outline-primary ms-2" href="{% url 'documents:document_create' %}"><i class="bi bi-upload"></i> Uit document</a>{% endif %}
-{% endblock %}
-{% block extra_filters %}<input type="hidden" name="weergave" value="{{ view }}">{% endblock %}
-{% block thead %}<th>Container</th><th>Klant</th><th>Klantref.</th><th>Cory ref.</th><th>Rederij</th><th>Schip / reis</th><th>ETA</th><th>Keurpunt</th><th>Keuring</th><th>Status</th>{% endblock %}
-{% block row %}
-<td><a href="{% url 'shipments:sea_detail' obj.pk %}" class="fw-semibold">{{ obj.container_number }}</a><div class="small text-muted">{{ obj.get_container_type_display }}</div></td>
-<td>{{ obj.customer }}</td><td>{{ obj.customer_reference|default:"-" }}</td><td>{{ obj.cory_reference|default:"-" }}</td><td>{{ obj.shipping_line.scac|default:obj.shipping_line|default:"-" }}</td>
-<td>{% if obj.vessel_changed %}<span class="vessel-changed" title="Gewisseld van {{ obj.original_vessel_name }}"><i class="bi bi-arrow-left-right"></i> {{ obj.vessel_name }}</span><div class="small text-muted text-decoration-line-through">{{ obj.original_vessel_name }}</div>{% else %}{{ obj.vessel_name|default:"-" }}{% endif %}{% if obj.voyage %} <span class="small text-muted">{{ obj.voyage }}</span>{% endif %}</td>
-<td class="text-nowrap">{% if obj.ata %}<span class="text-success" title="Aangekomen">{{ obj.ata|date:"D j/n H:i" }} ✓</span>{% else %}{{ obj.eta|date:"D j/n H:i"|default:"-" }}{% if obj.eta_delay_hours > 0 %} <span class="badge text-bg-warning">+{{ obj.eta_delay_hours }}u</span>{% elif obj.eta_delay_hours < 0 %} <span class="badge text-bg-info">{{ obj.eta_delay_hours }}u</span>{% endif %}{% endif %}
-  {% if obj.tracking_last_error %}<i class="bi bi-exclamation-circle text-danger" title="{{ obj.tracking_last_error }}"></i>{% endif %}</td>
-<td>{{ obj.inspection_point|default:"-" }}</td>
-<td>{% badge obj.inspection_status obj.get_inspection_status_display %}{% if obj.ched_number %}<div class="small text-muted">{{ obj.ched_number }}</div>{% endif %}</td>
-<td>{% badge obj.status obj.get_status_display %}{% if obj.demurrage_risk %} <i class="bi bi-hourglass-split text-danger" title="Vrije dagen t/m {{ obj.free_time_until|date:'j M' }}"></i>{% endif %}</td>
+{% extends "base.html" %}{% load portal %}
+{% block title %}Zeevracht{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Zendingen</div><h3>Zeevracht</h3></div>
+  <div class="page-actions">
+    <a class="btn btn-sm btn-outline-secondary" href="{% querystring_with export='csv' %}"><i class="bi bi-filetype-csv"></i> Export</a>
+    {% if perms.shipments.refresh_tracking %}<form method="post" action="{% url 'shipments:sea_refresh_all' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary" title="Haal ETA en schip op voor alle open containers"><i class="bi bi-arrow-repeat"></i> Ververs ETA's</button></form>{% endif %}
+    {% if perms.shipments.add_seashipment %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'documents:document_create' %}"><i class="bi bi-upload"></i> Uit document</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'shipments:sea_bulk' %}"><i class="bi bi-stack"></i> Meerdere</a>
+    <a class="btn btn-sm btn-primary" href="{% url 'shipments:seashipment_create' %}"><i class="bi bi-plus-lg"></i> Container</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="view-pills">
+  {% for v in views %}
+  <a class="view-pill{% if v.key == view %} active{% endif %}{% if v.count and v.key in 'ched gewisseld demurrage' %} alert-pill{% endif %}" href="?weergave={{ v.key }}">{{ v.label }} <span class="count">{{ v.count }}</span></a>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <form class="toolbar" method="get">
+    <input type="hidden" name="weergave" value="{{ view }}">
+    <input class="form-control form-control-sm search" name="q" value="{{ q }}" placeholder="Zoek in deze lijst…">
+    {% for f in filters %}
+    <select name="{{ f.name }}" class="form-select form-select-sm" onchange="this.form.submit()">
+      <option value="">{{ f.label|capfirst }}: alle</option>
+      {% for value, label in f.options %}<option value="{{ value }}"{% if value == f.value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    {% endfor %}
+    <button class="btn btn-sm btn-outline-secondary">Filter</button>
+    <span class="ms-auto small text-body-secondary">{{ paginator.count }} container{{ paginator.count|pluralize:"s" }}</span>
+  </form>
+  <div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead><tr>
+      <th data-sort>Container</th><th data-sort>Klant / referentie</th><th data-sort>Rederij</th><th data-sort>Schip / reis</th>
+      <th data-sort="date">ETA</th><th data-sort class="col-wide-only">Keurpunt</th><th data-sort>Keuring</th><th data-sort="num">Vrije dagen</th><th data-sort>Status</th>
+    </tr></thead>
+    <tbody>
+    {% for s in object_list %}
+    <tr data-href="{% url 'shipments:sea_detail' s.pk %}">
+      <td>{{ s.container_number|cnr }}<div class="small text-body-secondary">{{ s.container_type }}</div></td>
+      <td>{{ s.customer }}<div class="small text-body-secondary font-monospace">{{ s.customer_reference|default:"" }}{% if s.cory_reference %} · {{ s.cory_reference }}{% endif %}</div></td>
+      <td>{{ s.shipping_line.scac|default:s.shipping_line|default:"–" }}</td>
+      <td>{% if s.vessel_changed %}<span class="vessel-changed" title="Gewisseld van {{ s.original_vessel_name }}"><i class="bi bi-arrow-left-right"></i> {{ s.vessel_name }}</span><div class="small text-body-secondary text-decoration-line-through">{{ s.original_vessel_name }}</div>{% else %}{{ s.vessel_name|default:"–" }}{% endif %}{% if s.voyage %}<div class="small text-body-secondary font-monospace">{{ s.voyage }}</div>{% endif %}</td>
+      <td class="text-nowrap" data-value="{{ s.ata|default:s.eta|date:'U' }}">
+        {% if s.ata %}<span class="text-success">{{ s.ata|date:"D j/n H:i" }}</span><div class="small text-body-secondary">aangekomen</div>
+        {% elif s.eta %}{{ s.eta|date:"D j/n H:i" }}<div class="small text-body-secondary">{{ s.days_to_eta|days_label }}{% if s.eta_delay_hours > 0 %} · <span class="text-warning-emphasis">+{{ s.eta_delay_hours }}u</span>{% elif s.eta_delay_hours < 0 %} · <span class="text-info-emphasis">{{ s.eta_delay_hours }}u</span>{% endif %}</div>
+        {% else %}<span class="text-body-secondary">onbekend</span>{% endif %}
+        {% if s.tracking_last_error %}<i class="bi bi-exclamation-circle text-danger" title="{{ s.tracking_last_error }}"></i>{% endif %}
+      </td>
+      <td class="small col-wide-only">{{ s.inspection_point|default:"–" }}</td>
+      <td>{% badge s.inspection_status s.get_inspection_status_display %}{% if s.ched_number %}<div class="small text-body-secondary font-monospace">{{ s.ched_number }}</div>{% endif %}</td>
+      <td data-value="{{ s.free_days_left|default_if_none:'9999' }}">{% if s.free_days_left is not None %}<span class="chip chip-{% if s.free_days_left <= 0 %}danger{% elif s.free_days_left <= 2 %}warning{% else %}secondary{% endif %}">{{ s.free_days_left }} d</span>{% else %}<span class="text-body-secondary">–</span>{% endif %}</td>
+      <td>{% badge s.status s.get_status_display %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="9"><div class="empty-state"><i class="bi bi-water"></i>Geen containers in deze weergave.{% if perms.shipments.add_seashipment %}<div class="mt-2"><a class="btn btn-sm btn-primary" href="{% url 'shipments:seashipment_create' %}">Container toevoegen</a> <a class="btn btn-sm btn-outline-secondary" href="{% url 'documents:document_create' %}">Uit document</a></div>{% endif %}</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% include "core/_pagination.html" %}
 {% endblock %}

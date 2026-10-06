@@ -86,7 +86,8 @@ def apply_result(shipment, result, now=None, provider_name=None):
             shipment.vessel_changed = True
             shipment.vessel_changed_at = now
         shipment.vessel_name = new_vessel
-        shipment.vessel_imo = result.vessel_imo or shipment.vessel_imo
+        # Bij een ander schip hoort het oude IMO-nummer er niet meer bij.
+        shipment.vessel_imo = result.vessel_imo or ("" if vessel_changed else shipment.vessel_imo)
         shipment.voyage = result.voyage or shipment.voyage
 
     if result.ata and not shipment.ata:
@@ -103,6 +104,8 @@ def apply_result(shipment, result, now=None, provider_name=None):
     if result.eta_original:
         # De eerste ETA van de rederij is leidend voor de berekende vertraging.
         shipment.eta_original = result.eta_original
+    if result.departed_at and not shipment.departed_at:
+        shipment.departed_at = result.departed_at
     if result.discharged_at and not shipment.discharged_at:
         shipment.discharged_at = result.discharged_at
     if result.last_free_day and result.last_free_day != shipment.free_time_until:

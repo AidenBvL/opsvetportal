@@ -5,41 +5,84 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views import generic
-
-from core.audit import history_for
 from django.views.decorators.http import require_POST
 
+from core.audit import history_for
 from core.crud import CrudCreateView, CrudListView, CrudUpdateView
 
 from .forms import BulkContainerForm, RoadTransportForm, SeaShipmentForm
-from .models import RoadTransport, SeaShipment
+from .models import INSPECTION_STATUS_CHOICES, RoadTransport, SeaShipment
 from .tracking.service import refresh_all, refresh_shipment
+
+
+SEA_VIEWS = [
+    ("open", "Open"),
+    ("week", "Aankomst ≤ 7 dagen"),
+    ("keuring", "Keuring lopend"),
+    ("ched", "CHED aanmelden"),
+    ("gewisseld", "Schipwissels"),
+    ("demurrage", "Vrije dagen bijna op"),
+    ("alle", "Alle"),
+]
+
+
+def sea_view_filter(qs, view):
+    from datetime import timedelta
+
+    today = timezone.localdate()
+    open_qs = qs.filter(status__in=SeaShipment.OPEN_STATUSES)
+    return {
+        "open": open_qs,
+        "week": open_qs.filter(eta__date__lte=today + timedelta(days=7), ata__isnull=True),
+        "keuring": open_qs.filter(inspection_required=True).exclude(inspection_status__in=["vrijgegeven", "n.v.t."]),
+        "ched": open_qs.filter(inspection_required=True, inspection_status="aan_te_melden"),
+        "gewisseld": open_qs.filter(vessel_changed=True),
+        "demurrage": open_qs.filter(free_time_until__isnull=False, free_time_until__lte=today + timedelta(days=2)),
+        "alle": qs,
+    }.get(view, open_qs)
 
 
 class SeaListView(CrudListView):
     model = SeaShipment
     namespace = "shipments"
     template_name = "shipments/sea_list.html"
-    search_fields = ["container_number", "customer_reference", "cory_reference", "bl_number", "vessel_name", "customer__name", "ched_number"]
-    list_filters = ["status", "customer", "shipping_line", "inspection_point", "inspection_status"]
+    search_fields = ["container_number", "customer_reference", "cory_reference", "bl_number", "booking_number",
+                     "vessel_name", "customer__name", "ched_number"]
+    list_filters = ["customer", "shipping_line", "inspection_point", "handler"]
     paginate_by = 100
 
     def get_queryset(self):
         qs = super().get_queryset().select_related("customer", "shipping_line", "inspection_point", "handler")
-        view = self.request.GET.get("weergave", "open")
-        if view == "open":
-            qs = qs.filter(status__in=SeaShipment.OPEN_STATUSES)
-        elif view == "gewisseld":
-            qs = qs.filter(vessel_changed=True, status__in=SeaShipment.OPEN_STATUSES)
-        elif view == "keuring":
-            qs = qs.filter(inspection_required=True, status__in=SeaShipment.OPEN_STATUSES).exclude(inspection_status="vrijgegeven")
-        return qs.order_by("eta")
+        return sea_view_filter(qs, self.request.GET.get("weergave", "open")).order_by("eta")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        base = SeaShipment.objects.all()
         context["view"] = self.request.GET.get("weergave", "open")
+        context["views"] = [{"key": k, "label": label, "count": sea_view_filter(base, k).count()} for k, label in SEA_VIEWS]
         context["now"] = timezone.now()
         return context
+
+    def render_to_response(self, context, **kwargs):
+        if self.request.GET.get("export") == "csv":
+            import csv
+
+            from django.http import HttpResponse
+
+            response = HttpResponse(content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = 'attachment; filename="zeevracht.csv"'
+            response.write("\ufeff")
+            writer = csv.writer(response, delimiter=";")
+            writer.writerow(["Container", "Klant", "Klantref", "Cory ref", "B/L", "Rederij", "Schip", "Reis", "ETA", "ATA",
+                             "Keurpunt", "CHED", "Keuring", "Status", "Vrije dagen t/m", "Behandelaar"])
+            fmt = lambda d: timezone.localtime(d).strftime("%d-%m-%Y %H:%M") if d else ""  # noqa: E731
+            for s in self.object_list:
+                writer.writerow([s.container_number, s.customer, s.customer_reference, s.cory_reference, s.bl_number,
+                                 s.shipping_line or "", s.vessel_name, s.voyage, fmt(s.eta), fmt(s.ata), s.inspection_point or "",
+                                 s.ched_number, s.get_inspection_status_display(), s.get_status_display(),
+                                 s.free_time_until.strftime("%d-%m-%Y") if s.free_time_until else "", s.handler or ""])
+            return response
+        return super().render_to_response(context, **kwargs)
 
 
 class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
@@ -59,6 +102,8 @@ class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
             "documents": s.documents.all(),
             "meeting_items": s.meeting_items.select_related("meeting")[:10],
             "history": history_for(s),
+            "work_count": s.actions.count() + s.extra_costs.count(),
+            "inspection_choices": INSPECTION_STATUS_CHOICES,
         })
         return context
 
@@ -211,3 +256,47 @@ def search(request):
     if len(results["sea"]) == 1 and not results["road"] and not results["customers"]:
         return redirect("shipments:sea_detail", pk=results["sea"][0].pk)
     return render(request, "shipments/search.html", {"q": q, **results})
+
+
+@require_POST
+@permission_required("shipments.change_seashipment", raise_exception=True)
+def quick_update(request, pk):
+    """Snel één veld wijzigen vanuit het dossier (status, keuringsstatus, behandelaar)."""
+    shipment = get_object_or_404(SeaShipment, pk=pk)
+    changed = []
+    if request.POST.get("status") in dict(SeaShipment.STATUS_CHOICES):
+        shipment.status = request.POST["status"]
+        changed.append("status")
+    from .models import INSPECTION_STATUS_CHOICES
+
+    if request.POST.get("inspection_status") in dict(INSPECTION_STATUS_CHOICES):
+        shipment.inspection_status = request.POST["inspection_status"]
+        changed.append("keuringsstatus")
+    if "customs_cleared" in request.POST:
+        shipment.customs_cleared = request.POST["customs_cleared"] == "1"
+        changed.append("douane")
+    if changed:
+        shipment.save()
+        messages.success(request, f"{shipment.container_number}: {', '.join(changed)} bijgewerkt.")
+    if request.POST.get("next", "").startswith("/"):
+        return redirect(request.POST["next"])
+    return redirect("shipments:sea_detail", pk=pk)
+
+
+@require_POST
+@permission_required("shipments.change_seashipment", raise_exception=True)
+def paste_tracking(request, pk):
+    """Verwerk tekst die van de trackingpagina van de rederij is gekopieerd."""
+    from .paste import parse_tracking_text
+    from .tracking.service import apply_result
+
+    shipment = get_object_or_404(SeaShipment, pk=pk)
+    result = parse_tracking_text(request.POST.get("text", ""))
+    if result is None:
+        messages.error(request, "Geen schip of ETA gevonden in de geplakte tekst. Kopieer de hele trackingpagina (Ctrl+A, Ctrl+C).")
+        return redirect("shipments:sea_detail", pk=pk)
+    update = apply_result(shipment, result, provider_name="geplakt")
+    parts = [p for p in [result.vessel_name, result.voyage,
+                         f"ETA {timezone.localtime(result.eta):%d-%m %H:%M}" if result.eta else ""] if p]
+    messages.success(request, "Overgenomen: " + " · ".join(parts) + (f". {update.message}" if update.message else ""))
+    return redirect("shipments:sea_detail", pk=pk)

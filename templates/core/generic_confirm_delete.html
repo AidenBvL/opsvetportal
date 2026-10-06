@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<h3>Verwijderen</h3>
-<div class="card"><div class="card-body">
-<p>Weet je zeker dat je <strong>{{ object }}</strong> ({{ verbose_name }}) wilt verwijderen? Dit kan niet ongedaan worden gemaakt.</p>
-<form method="post">{% csrf_token %}<button class="btn btn-danger">Ja, verwijderen</button> <a href="{{ list_url }}" class="btn btn-outline-secondary">Annuleren</a></form>
+<div class="card mx-auto" style="max-width:560px"><div class="card-body p-4">
+  <div class="d-flex gap-3"><span class="kpi-icon danger"><i class="bi bi-trash"></i></span>
+  <div><h5>{{ verbose_name|capfirst }} verwijderen?</h5>
+  <p class="text-body-secondary"><strong>{{ object }}</strong> wordt definitief verwijderd. Dit kan niet ongedaan worden gemaakt.</p>
+  <form method="post" class="d-flex gap-2">{% csrf_token %}<button class="btn btn-danger">Ja, verwijderen</button> <a href="{{ list_url }}" class="btn btn-outline-secondary">Annuleren</a></form></div></div>
 </div></div>
 {% endblock %}

@@ -63,9 +63,32 @@ class DashboardView(generic.TemplateView):
                 "open_questions": MeetingItem.objects.filter(status="open", meeting__date__gte=today - timedelta(days=7)).count(),
                 "recent_tracking": TrackingUpdate.objects.filter(checked_at__gte=now - timedelta(days=2)).exclude(message="").select_related("shipment")[:8],
                 "cost_totals": cost_summary(ExtraCost.objects.filter(cost_date__gte=today.replace(day=1))),
+                "arrival_chart": arrival_chart(today),
+                "in_transit": SeaShipment.objects.filter(status="verwacht").count(),
+                "arrived_open": SeaShipment.objects.filter(status__in=["aangekomen", "keuring"]).count(),
+                "meetings_today": MeetingItem.objects.filter(meeting__date=today).count(),
+                "hour": timezone.localtime().hour,
             }
         )
         return context
+
+
+def arrival_chart(today, days=14):
+    """Aantal verwachte aankomsten per dag voor de komende twee weken."""
+    counts = {}
+    for eta in SeaShipment.objects.filter(
+        status__in=SeaShipment.OPEN_STATUSES, ata__isnull=True, eta__date__range=(today, today + timedelta(days=days - 1))
+    ).values_list("eta", flat=True):
+        day = timezone.localtime(eta).date()
+        counts[day] = counts.get(day, 0) + 1
+    peak = max(counts.values(), default=0) or 1
+    bars = []
+    for i in range(days):
+        day = today + timedelta(days=i)
+        n = counts.get(day, 0)
+        bars.append({"date": day, "count": n, "height": max(2, round(n / peak * 100)) if n else 2,
+                     "weekend": day.weekday() >= 5, "today": i == 0})
+    return bars
 
 
 class CustomerDetailView(PermissionRequiredMixin, generic.DetailView):

@@ -63,6 +63,7 @@ class SeaShipment(TimeStampedModel):
     port_of_discharge = models.CharField("loshaven (POD)", max_length=100, default="NLRTM", help_text="UN/LOCODE, bijv. NLRTM.")
     terminal = models.CharField("terminal", max_length=100, blank=True)
 
+    departed_at = models.DateTimeField("vertrokken uit laadhaven (ATD)", null=True, blank=True)
     eta = models.DateTimeField("ETA", null=True, blank=True)
     eta_original = models.DateTimeField("oorspronkelijke ETA", null=True, blank=True)
     ata = models.DateTimeField("ATA (werkelijke aankomst)", null=True, blank=True)
@@ -125,6 +126,37 @@ class SeaShipment(TimeStampedModel):
         if self.eta and self.eta_original:
             return round((self.eta - self.eta_original).total_seconds() / 3600)
         return 0
+
+    @property
+    def voyage_progress(self):
+        """Percentage van de zeereis (vertrek → ETA), of None als dat niet te bepalen is."""
+        end = self.ata or self.eta
+        if self.ata:
+            return 100
+        if not self.departed_at or not end or end <= self.departed_at:
+            return None
+        done = (timezone.now() - self.departed_at) / (end - self.departed_at)
+        return max(0, min(99, round(done * 100)))
+
+    @property
+    def days_to_eta(self):
+        if not self.eta or self.ata:
+            return None
+        return (timezone.localtime(self.eta).date() - timezone.localdate()).days
+
+    @property
+    def free_days_left(self):
+        if not self.free_time_until:
+            return None
+        return (self.free_time_until - timezone.localdate()).days
+
+    @property
+    def carrier_tracking_url(self):
+        line = self.shipping_line
+        if not line or not line.tracking_url_template:
+            return ""
+        number = self.bl_number or self.booking_number or self.container_number
+        return line.tracking_url_template.replace("{container}", self.container_number).replace("{number}", number)
 
     @property
     def demurrage_risk(self):

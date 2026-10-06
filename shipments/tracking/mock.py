@@ -66,5 +66,6 @@ class MockProvider(BaseProvider):
             vessel_imo=vessel[1],
             voyage=voyage,
             legs=[leg],
+            departed_at=anchor - timedelta(days=24),
             raw={"demo": True, "eta": eta.isoformat(), "vessel": vessel[0]},
         )
