@@ -159,4 +159,11 @@ def send_invite(user, subject="Je account voor het portaal van Cory Brothers"):
         "uid": urlsafe_base64_encode(force_bytes(user.pk)), "token": default_token_generator.make_token(user),
     }
     body = render_to_string("registration/password_reset_email.txt", context)
-    transaction.on_commit(lambda: send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [user.email]))
+
+    def _send():
+        try:
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [user.email])
+        except Exception:  # noqa: BLE001 - een mailfout mag het aanmaken van een account niet blokkeren
+            log.exception("Uitnodiging naar %s mislukt", user.email)
+
+    transaction.on_commit(_send)

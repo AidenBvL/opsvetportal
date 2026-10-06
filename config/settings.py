@@ -14,8 +14,30 @@ def env_bool(name, default=False):
     return os.environ.get(name, str(default)).lower() in {"1", "true", "yes", "ja"}
 
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-me")
+def is_placeholder(value):
+    """Voorbeeldwaarden uit .env.example tellen als 'niet ingesteld'."""
+    value = (value or "").strip().lower()
+    return not value or value in {"value", "wijzig-mij"} or "example." in value or value.startswith(("vervang", "dev-only"))
+
+
+def env_value(name, default=""):
+    value = os.environ.get(name, "")
+    return default if is_placeholder(value) else value
+
+
 DEBUG = env_bool("DJANGO_DEBUG", True)
+SECRET_KEY = env_value("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "dev-only-insecure-key-change-me"
+    elif os.environ.get("DATABASE_URL"):
+        # Geen (echte) sleutel ingesteld: leid een stabiele, geheime sleutel af van de database-URL
+        # (die bevat het databasewachtwoord), zodat het portaal veilig blijft draaien.
+        import hashlib
+        import logging
+
+        SECRET_KEY = hashlib.sha256(("opsvet-secret:" + os.environ["DATABASE_URL"]).encode()).hexdigest()
+        logging.getLogger(__name__).warning("DJANGO_SECRET_KEY ontbreekt of is een voorbeeldwaarde; afgeleide sleutel gebruikt.")
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
 CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o]
 # Render (en vergelijkbare hosts) geven de publieke hostnaam door; die wordt automatisch toegestaan.
@@ -124,7 +146,7 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES", True)
     CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    if SECRET_KEY.startswith("dev-only"):
+    if not SECRET_KEY or SECRET_KEY.startswith("dev-only"):
         raise RuntimeError("Zet DJANGO_SECRET_KEY voor productie.")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -135,12 +157,12 @@ LOGOUT_REDIRECT_URL = "login"
 
 # --- Tracking (ETA / vessel) -------------------------------------------------
 # Standaard provider voor rederijen zonder eigen configuratie: "mock" of "dcsa".
-TRACKING_DEFAULT_PROVIDER = os.environ.get("TRACKING_DEFAULT_PROVIDER", "mock")
+TRACKING_DEFAULT_PROVIDER = env_value("TRACKING_DEFAULT_PROVIDER", "mock")
 TRACKING_HTTP_TIMEOUT = int(os.environ.get("TRACKING_HTTP_TIMEOUT", "20"))
-TERMINAL49_API_KEY = os.environ.get("TERMINAL49_API_KEY", "")
-SAFECUBE_API_KEY = os.environ.get("SAFECUBE_API_KEY", "")
-SAFECUBE_BASE_URL = os.environ.get("SAFECUBE_BASE_URL", "https://api.sinay.ai/container-tracking/api/v2")
-SAFECUBE_API_KEY_HEADER = os.environ.get("SAFECUBE_API_KEY_HEADER", "API_KEY")
+TERMINAL49_API_KEY = env_value("TERMINAL49_API_KEY")
+SAFECUBE_API_KEY = env_value("SAFECUBE_API_KEY")
+SAFECUBE_BASE_URL = env_value("SAFECUBE_BASE_URL", "https://api.sinay.ai/container-tracking/api/v2")
+SAFECUBE_API_KEY_HEADER = env_value("SAFECUBE_API_KEY_HEADER", "API_KEY")
 
 # --- Documentherkenning ------------------------------------------------------
 TESSERACT_CMD = os.environ.get("TESSERACT_CMD", "")
@@ -155,19 +177,21 @@ LOGGING = {
 
 # --- E-mail ----------------------------------------------------------------
 # Zonder EMAIL_HOST worden mails naar de console geschreven (handig bij testen).
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_HOST = env_value("EMAIL_HOST")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_HOST_USER = env_value("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = env_value("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",
-    "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST else "django.core.mail.backends.console.EmailBackend",
+    # Alleen echt mailen als server, gebruiker en wachtwoord allemaal (echt) ingevuld zijn.
+    "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
+    else "django.core.mail.backends.console.EmailBackend",
 )
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "OPS/VET Portaal <noreply@example.com>")
+DEFAULT_FROM_EMAIL = env_value("DEFAULT_FROM_EMAIL", f"OPS/VET Portaal <{EMAIL_HOST_USER or 'noreply@localhost'}>")
 # Basis-URL voor links in e-mails, bijv. https://portaal.example.nl
-PORTAL_BASE_URL = os.environ.get("PORTAL_BASE_URL", os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:8000")).rstrip("/")
+PORTAL_BASE_URL = env_value("PORTAL_BASE_URL", os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:8000")).rstrip("/")
 # Geheim token voor /cron/<token>/ (gratis hosting zonder achtergrondproces).
-CRON_TOKEN = os.environ.get("CRON_TOKEN", "")
+CRON_TOKEN = env_value("CRON_TOKEN")
 # Tijdstip (HH:MM) waarop het dagoverzicht en de dienstherinneringen worden verstuurd.
 DAILY_DIGEST_TIME = os.environ.get("DAILY_DIGEST_TIME", "07:30")

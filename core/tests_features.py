@@ -113,3 +113,28 @@ class AuditLogTests(TestCase):
 
         for group in Group.objects.all():
             self.assertFalse(group.permissions.filter(codename__in=["change_auditlog", "delete_auditlog"]).exists(), group)
+
+
+class PlaceholderSettingsTests(TestCase):
+    def test_placeholders_are_ignored(self):
+        from config.settings import is_placeholder
+
+        for value in ["", "value", "wijzig-mij", "vervang-door-een-lange-willekeurige-string",
+                      "https://portaal.example.nl", "portaal@example.nl", "OPS/VET Portaal <portaal@example.nl>"]:
+            self.assertTrue(is_placeholder(value), value)
+        for value in ["safecube", "https://opsvet-portaal.onrender.com", "smtp.office365.com", "d06b-key"]:
+            self.assertFalse(is_placeholder(value), value)
+
+    def test_secret_key_and_email_with_placeholders(self):
+        import os
+        import subprocess
+        import sys
+
+        env = {**os.environ, "DJANGO_DEBUG": "0", "DJANGO_SECRET_KEY": "vervang-door-een-lange-willekeurige-string",
+               "DATABASE_URL": "postgresql://u:geheim@db/x", "EMAIL_HOST": "smtp.office365.com",
+               "EMAIL_HOST_USER": "portaal@example.nl", "EMAIL_HOST_PASSWORD": "",
+               "PORTAL_BASE_URL": "https://portaal.example.nl", "RENDER_EXTERNAL_URL": "https://opsvet.onrender.com"}
+        code = ("import config.settings as s; print(s.SECRET_KEY.startswith('vervang'), len(s.SECRET_KEY) > 40, "
+                "s.EMAIL_BACKEND.endswith('console.EmailBackend'), s.PORTAL_BASE_URL)")
+        out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, cwd=os.getcwd())
+        self.assertEqual(out.stdout.split(), ["False", "True", "True", "https://opsvet.onrender.com"], out.stderr)
