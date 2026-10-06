@@ -9,9 +9,10 @@
 <div class="row g-3">
 <div class="col-lg-7"><div class="card"><div class="card-header">Herkende gegevens - controleer en vul aan</div><div class="card-body">
   {% if containers %}<div class="small mb-2">{% for c in containers %}<span class="badge text-bg-light text-dark border">{{ c.container_number }}{% if c.container_type %} · {{ c.container_type }}{% endif %}{% if c.seal_number %} · zegel {{ c.seal_number }}{% endif %}</span> {% endfor %}</div>{% endif %}
+  {% if parties %}<div class="row g-2 small mb-3">{% for label, value in parties %}<div class="col-md-4"><div class="text-body-secondary text-uppercase" style="font-size:.7rem">{{ label }}</div><div style="white-space:pre-line">{{ value }}</div></div>{% endfor %}</div>{% endif %}
   <form method="post">{% csrf_token %}{% include "core/_form_fields.html" %}<button class="btn btn-primary"><i class="bi bi-check2-all"></i> Dossiers aanmaken / bijwerken</button></form>
 </div></div></div>
-<div class="col-lg-5"><div class="card"><div class="card-header d-flex">Herkende tekst<a class="ms-auto small" href="{{ document.file.url }}" target="_blank">origineel openen</a></div>
+<div class="col-lg-5"><div class="card"><div class="card-header d-flex">Herkende tekst<a class="ms-auto small" href="{% url 'documents:file' document.pk %}" target="_blank" rel="noopener">origineel openen</a></div>
   <pre class="card-body small mb-0" style="max-height:70vh;overflow:auto;white-space:pre-wrap">{{ document.extracted_text|default:"(geen tekst)" }}</pre></div></div>
 </div>
 {% endblock %}

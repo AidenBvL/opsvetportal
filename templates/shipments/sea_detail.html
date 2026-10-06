@@ -20,7 +20,7 @@
         {% if perms.actions.add_action %}<li><a class="dropdown-item" href="{% url 'actions:action_create' %}?sea_shipment={{ object.pk }}&customer={{ object.customer_id }}"><i class="bi bi-check2-square me-2"></i>Actie</a></li>
         <li><a class="dropdown-item" href="{% url 'actions:action_create' %}?sea_shipment={{ object.pk }}&customer={{ object.customer_id }}&kind=escalatie&priority=3"><i class="bi bi-exclamation-triangle me-2"></i>Escalatie</a></li>{% endif %}
         {% if perms.actions.add_extracost %}<li><a class="dropdown-item" href="{% url 'actions:extracost_create' %}?sea_shipment={{ object.pk }}&customer={{ object.customer_id }}"><i class="bi bi-currency-euro me-2"></i>Extra kosten</a></li>{% endif %}
-        {% if perms.documents.add_document %}<li><a class="dropdown-item" href="{% url 'documents:document_create' %}?customer={{ object.customer_id }}"><i class="bi bi-upload me-2"></i>Document</a></li>{% endif %}
+        {% if perms.documents.add_document %}<li><a class="dropdown-item" href="#tab-docs" data-open-tab="#tab-docs"><i class="bi bi-upload me-2"></i>Document</a></li>{% endif %}
       </ul>
     </div>
     {% if perms.shipments.change_seashipment %}<a class="btn btn-sm btn-primary" href="{% url 'shipments:seashipment_update' object.pk %}"><i class="bi bi-pencil"></i> Bewerken</a>{% endif %}
@@ -76,7 +76,7 @@
       <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-details" type="button">Gegevens</button></li>
       <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-tracking" type="button">Tracking <span class="badge rounded-pill text-bg-secondary">{{ updates|length }}</span></button></li>
       <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-work" type="button">Acties & kosten <span class="badge rounded-pill text-bg-secondary">{{ work_count }}</span></button></li>
-      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-docs" type="button">Documenten & overleg</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-docs" type="button">Documenten{% if meeting_items %} & overleg{% endif %} <span class="badge rounded-pill text-bg-secondary">{{ documents|length }}</span></button></li>
       {% if perms.core.view_auditlog %}<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-history" type="button">Historie</button></li>{% endif %}
     </ul>
     <div class="tab-content card border-top-0" style="border-top-left-radius:0;border-top-right-radius:0">
@@ -131,11 +131,13 @@
         <div class="list-group">{% for c in costs %}<div class="list-group-item d-flex gap-2 align-items-center"><span class="flex-grow-1">{{ c.description }}</span>{% badge c.responsibility c.get_responsibility_display %}<span class="num fw-semibold">{{ c.amount|euro }}</span></div>{% empty %}<div class="text-body-secondary small">Geen extra kosten.</div>{% endfor %}</div>
       </div>
       <div class="tab-pane fade p-3" id="tab-docs">
+        {% include "documents/_attached.html" with kind="zee" %}
+        {% if meeting_items %}
+        <h6 class="text-body-secondary small text-uppercase mt-4">Overlegpunten</h6>
         <div class="list-group">
-          {% for d in documents %}<a class="list-group-item list-group-item-action" href="{% url 'documents:document_detail' d.pk %}"><i class="bi bi-file-earmark-text me-2"></i>{{ d }} <span class="small text-body-secondary">{{ d.get_doc_type_display }}</span></a>{% endfor %}
           {% for m in meeting_items %}<a class="list-group-item list-group-item-action" href="{% url 'meetings:day' %}?datum={{ m.meeting.date|date:'Y-m-d' }}"><i class="bi bi-chat-square-text me-2"></i>{{ m.meeting }}: {{ m.title }}</a>{% endfor %}
-          {% if not documents and not meeting_items %}<div class="text-body-secondary small">Geen documenten of overlegpunten.</div>{% endif %}
         </div>
+        {% endif %}
       </div>
       {% if perms.core.view_auditlog %}<div class="tab-pane fade p-3" id="tab-history">{% include "core/_history.html" %}{% if not history %}<div class="text-body-secondary small">Nog geen wijzigingen.</div>{% endif %}</div>{% endif %}
     </div>

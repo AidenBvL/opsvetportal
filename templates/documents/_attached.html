@@ -1,0 +1,36 @@
+{# Documenten bij een dossier: uploaden (slepen of kiezen), openen, ontkoppelen. Verwacht: documents, object, kind ("zee"/"weg"). #}
+{% if perms.documents.add_document %}
+<form method="post" enctype="multipart/form-data" action="{% url 'documents:upload_for_shipment' kind object.pk %}" class="mb-3">{% csrf_token %}
+  <div class="d-flex flex-wrap gap-2 align-items-center">
+    <select name="doc_type" class="form-select form-select-sm" data-plain style="max-width:220px" aria-label="Soort document">
+      {% for value, label in doc_types %}<option value="{{ value }}"{% if value == "other" %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <label class="dropzone flex-grow-1 mb-0" data-dropzone>
+      <i class="bi bi-cloud-arrow-up"></i>
+      <span><strong>Sleep bestanden hierheen</strong> of klik om te kiezen<br><span class="small">PDF, foto, Word, Excel of e-mail · max. 25 MB per bestand</span></span>
+      <input type="file" name="files" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx,.msg,.eml">
+    </label>
+  </div>
+  <noscript><button class="btn btn-sm btn-primary mt-2">Uploaden</button></noscript>
+</form>
+{% endif %}
+<div class="list-group">
+  {% for d in documents %}
+  <div class="list-group-item doc-row">
+    <i class="bi {{ d.icon }} doc-icon"></i>
+    <div class="doc-name">
+      <a class="fw-semibold" href="{% url 'documents:file' d.pk %}" target="_blank" rel="noopener">{{ d }}</a>
+      <div class="small text-body-secondary">{{ d.get_doc_type_display }} · {{ d.created_at|date:"j M Y H:i" }}{% if d.uploaded_by %} · {{ d.uploaded_by.get_full_name|default:d.uploaded_by.username }}{% endif %}{% if d.status == "fout" %} · <span class="text-warning-emphasis" title="{{ d.error }}">tekst niet herkend</span>{% endif %}</div>
+    </div>
+    <div class="d-flex gap-1 flex-shrink-0">
+      {% if kind == "zee" and perms.documents.change_document and d.extracted_data.containers %}<a class="btn btn-sm btn-outline-primary" href="{% url 'documents:review' d.pk %}" title="Herkende gegevens (schip, reis, B/L, ...) controleren en in het dossier zetten"><i class="bi bi-magic"></i><span class="d-none d-md-inline"> Gegevens overnemen</span></a>{% endif %}
+      <a class="btn btn-icon btn-sm" href="{% url 'documents:file' d.pk %}" target="_blank" rel="noopener" title="Openen"><i class="bi bi-box-arrow-up-right"></i></a>
+      <a class="btn btn-icon btn-sm" href="{% url 'documents:file' d.pk %}?download=1" title="Downloaden"><i class="bi bi-download"></i></a>
+      <a class="btn btn-icon btn-sm" href="{% url 'documents:document_detail' d.pk %}" title="Details en herkende tekst"><i class="bi bi-info-circle"></i></a>
+      {% if perms.documents.change_document %}<form method="post" action="{% url 'documents:unlink' d.pk kind object.pk %}" onsubmit="return confirm('{{ d|escapejs }} loskoppelen van dit dossier?')">{% csrf_token %}<button class="btn btn-icon btn-sm" title="Loskoppelen van dit dossier"><i class="bi bi-x-lg"></i></button></form>{% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="list-group-item text-body-secondary small">Nog geen documenten bij dit dossier.</div>
+  {% endfor %}
+</div>

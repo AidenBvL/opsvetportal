@@ -20,6 +20,9 @@ urlpatterns = [
     path("<int:pk>/", views.DocumentDetailView.as_view(), name="document_detail"),
     path("<int:pk>/verwerken/", views.ReviewView.as_view(), name="review"),
     path("<int:pk>/opnieuw/", views.reprocess, name="reprocess"),
+    path("<int:pk>/bestand/", views.document_file, name="file"),
+    path("<int:pk>/ontkoppelen/<str:kind>/<int:shipment_pk>/", views.unlink_from_shipment, name="unlink"),
+    path("zending/<str:kind>/<int:pk>/uploaden/", views.upload_for_shipment, name="upload_for_shipment"),
     path("<int:pk>/bewerken/", views.ReviewView.as_view(), name="document_update"),
     path("<int:pk>/verwijderen/", DocumentDeleteView.as_view(), name="document_delete"),
 ]

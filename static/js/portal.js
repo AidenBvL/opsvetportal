@@ -123,6 +123,40 @@
   relative();
   setInterval(relative, 60000);
 
+  // Tabbladen: openen via #hash in de URL (bijv. na uploaden terug naar #tab-docs) en de hash bijwerken bij wisselen.
+  if (window.bootstrap && location.hash) {
+    const tab = $(`[data-bs-toggle="tab"][data-bs-target="${CSS.escape(location.hash)}"]`);
+    if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+  }
+  document.addEventListener("shown.bs.tab", e => {
+    const target = e.target.dataset.bsTarget;
+    if (target && target.startsWith("#tab-")) history.replaceState(null, "", target);
+  });
+  document.addEventListener("click", e => {
+    const link = e.target.closest("a[data-open-tab]");
+    const tab = link && $(`[data-bs-toggle="tab"][data-bs-target="${link.dataset.openTab}"]`);
+    if (!tab || !window.bootstrap) return;
+    e.preventDefault();
+    bootstrap.Tab.getOrCreateInstance(tab).show();
+    tab.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  // Uploadvak: bestanden slepen of kiezen; direct versturen.
+  $$("[data-dropzone]").forEach(zone => {
+    const form = zone.closest("form"), input = $("input[type=file]", zone);
+    if (!form || !input) return;
+    const send = () => { if (input.files.length) { zone.classList.add("is-busy"); form.submit(); } };
+    input.addEventListener("change", send);
+    ["dragenter", "dragover"].forEach(t => zone.addEventListener(t, e => { e.preventDefault(); zone.classList.add("is-over"); }));
+    ["dragleave", "drop"].forEach(t => zone.addEventListener(t, () => zone.classList.remove("is-over")));
+    zone.addEventListener("drop", e => {
+      e.preventDefault();
+      if (!e.dataTransfer.files.length) return;
+      input.files = e.dataTransfer.files;
+      send();
+    });
+  });
+
   // Formulier: waarschuwen bij weggaan met niet-opgeslagen wijzigingen.
   $$("form[data-dirty-warning]").forEach(form => {
     let dirty = false;
