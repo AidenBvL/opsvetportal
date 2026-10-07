@@ -215,6 +215,13 @@
     list.addEventListener("dragover", e => {
       if (!dragged) return;
       e.preventDefault();
+      // Tijdens slepen meescrollen als je bij de boven- of onderrand van de lijst komt.
+      const box = list.closest(".modal-body");
+      if (box) {
+        const rect = box.getBoundingClientRect(), edge = 60;
+        if (e.clientY < rect.top + edge) box.scrollTop -= 12;
+        else if (e.clientY > rect.bottom - edge) box.scrollTop += 12;
+      }
       const after = items().filter(li => li !== dragged && li.getAttribute("draggable") === "true")
         .find(li => e.clientY < li.getBoundingClientRect().top + li.offsetHeight / 2);
       if (after) list.insertBefore(dragged, after); else list.appendChild(dragged);
