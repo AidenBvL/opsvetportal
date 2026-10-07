@@ -214,6 +214,10 @@ class Port(TimeStampedModel):
         "andere schrijfwijzen", max_length=300, blank=True,
         help_text="Komma-gescheiden namen zoals ze op B/L's of trackingpagina's staan, bijv. ANTWERP, ANVERS.",
     )
+    container_port = models.BooleanField(
+        "containerhaven", default=False,
+        help_text="Komt in de suggesties en gaat voor bij havens met dezelfde naam (bijv. Manzanillo).",
+    )
     active = models.BooleanField("actief", default=True)
 
     class Meta:
@@ -227,6 +231,12 @@ class Port(TimeStampedModel):
     @property
     def country(self):
         return self.locode[:2]
+
+    @property
+    def country_name(self):
+        from .data.countries import COUNTRY_NAMES
+
+        return COUNTRY_NAMES.get(self.country, self.country)
 
     def save(self, *args, **kwargs):
         from .ports import clear_cache, recode_shipments
@@ -247,8 +257,12 @@ class Port(TimeStampedModel):
 class Terminal(TimeStampedModel):
     """Containerterminal. Varianten uit tracking ("ECT EUROMAX ROTTERDAM") worden de volledige naam."""
 
-    name = models.CharField("volledige naam", max_length=150, unique=True)
+    name = models.CharField("volledige naam", max_length=150)
+    code = models.CharField("terminalcode (SMDG)", max_length=10, blank=True, help_text="Bijv. EMX voor ECT Euromax.")
     port = models.ForeignKey(Port, verbose_name="haven", null=True, blank=True, on_delete=models.SET_NULL, related_name="terminals")
+    company = models.CharField("bedrijf", max_length=150, blank=True)
+    address = models.CharField("adres", max_length=250, blank=True)
+    website = models.URLField("website", max_length=250, blank=True)
     aliases = models.CharField(
         "andere schrijfwijzen", max_length=400, blank=True,
         help_text="Komma-gescheiden, zoals rederijen en trackingdiensten de terminal noemen, bijv. ECT EUROMAX ROTTERDAM, EUROMAX.",
@@ -256,12 +270,26 @@ class Terminal(TimeStampedModel):
     active = models.BooleanField("actief", default=True)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["port__locode", "name"]
         verbose_name = "terminal"
         verbose_name_plural = "terminals"
+        constraints = [
+            models.UniqueConstraint(fields=["port", "code"], condition=~models.Q(code=""), name="unique_terminal_code_per_port"),
+        ]
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.code})" if self.code and f"({self.code})" not in self.name else self.name
+
+    @property
+    def country_name(self):
+        return self.port.country_name if self.port_id else ""
+
+    @property
+    def label(self):
+        """"ECT EUROMAX TERMINAL (EMX) · Rotterdam, Nederland (NLRTM)"."""
+        from .ports import port_label
+
+        return f"{self} · {port_label(self.port.locode)}" if self.port_id else str(self)
 
     def save(self, *args, **kwargs):
         from .ports import clear_cache, recode_shipments

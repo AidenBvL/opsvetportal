@@ -118,7 +118,7 @@ class SeaShipment(TimeStampedModel):
         self.container_number = normalize_container_number(self.container_number)
         self.port_of_loading = port_code(self.port_of_loading)
         self.port_of_discharge = port_code(self.port_of_discharge) or "NLRTM"
-        self.terminal = terminal_name(self.terminal)
+        self.terminal = terminal_name(self.terminal, self.port_of_discharge)
         if self.vessel_name and not self.original_vessel_name:
             self.original_vessel_name = self.vessel_name
         if self.eta and not self.eta_original:

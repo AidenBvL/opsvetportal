@@ -163,7 +163,7 @@ def crud_urls(model, namespace, fields=None, form_class=None, list_display=(), s
     list_attrs = dict(attrs)
     for key, value in (("list_display", list_display), ("search_fields", search_fields),
                        ("list_filters", list_filters), ("queryset", queryset)):
-        if value:
+        if value is not None and (key == "queryset" or value):  # een queryset niet evalueren bij het laden van de URL's
             list_attrs[key] = value
     if list_view and not detail_url_name:
         list_attrs.pop("detail_url_name")

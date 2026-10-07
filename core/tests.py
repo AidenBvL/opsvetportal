@@ -86,6 +86,8 @@ class PortTests(TestCase):
         self.assertEqual(port_code("Manzanillo"), "Manzanillo")  # twee havens met die naam: niet raden
         self.assertEqual(port_code("MANZANILLO (MX)"), "MXZLO")
         self.assertEqual(port_code("Onbekende Haven"), "Onbekende Haven")
+        self.assertEqual(port_code("Qingdao"), "CNQIN")  # twee codes, alleen CNQIN heeft terminals
+        self.assertEqual(port_code("ITAJAI, BRAZIL"), "BRITJ")
         self.assertEqual(port_label("BRPNG"), "Paranaguá, Brazilië (BRPNG)")
         self.assertEqual(port_label("SGSIN"), "Singapore (SGSIN)")
         self.assertEqual(port_label("Onbekende Haven"), "Onbekende Haven")
@@ -95,9 +97,9 @@ class PortTests(TestCase):
         from shipments.models import SeaShipment
 
         customer = Customer.objects.create(name="K")
-        shipment = SeaShipment.objects.create(customer=customer, container_number="CSQU3054383", port_of_loading="PUERTO NUEVO")
-        self.assertEqual(shipment.port_of_loading, "PUERTO NUEVO")
-        Port.objects.create(locode="XXPNV", name="Puerto Nuevo")
+        shipment = SeaShipment.objects.create(customer=customer, container_number="CSQU3054383", port_of_loading="Nieuwe Testhaven")
+        self.assertEqual(shipment.port_of_loading, "Nieuwe Testhaven")
+        Port.objects.create(locode="XXPNV", name="Nieuwe Testhaven")
         shipment.refresh_from_db()
         self.assertEqual(shipment.port_of_loading, "XXPNV")
 
@@ -108,14 +110,23 @@ class TerminalTests(TestCase):
         from core.ports import terminal_name
         from shipments.models import SeaShipment
 
-        self.assertEqual(terminal_name("ECT EUROMAX ROTTERDAM"), "ECT Euromax Terminal")
-        self.assertEqual(terminal_name("hutchison port delta ii"), "Hutchison Ports Delta II")
+        from core.ports import terminal_label
+
+        # Officiële SMDG-namen en -codes; varianten en afkortingen van rederijen worden herkend.
+        self.assertEqual(terminal_name("ECT EUROMAX ROTTERDAM"), "ECT EUROMAX TERMINAL (EMX)")
+        self.assertEqual(terminal_name("hutchison port delta ii"), "HUTCHISON DELTA II ROTTERDAM (HPD2)")
+        self.assertEqual(terminal_name("TCP TER DE CONT DE PARANAGUA SA"), "TCP DE CONTEINERES DE PARANAGUA SA (TCP)")
+        self.assertEqual(terminal_name("RWG"), "ROTTERDAM WORLD GATEWAY (RWG)")
         self.assertEqual(terminal_name("Onbekende kade"), "Onbekende kade")
+        self.assertEqual(terminal_name("TERMINAL"), "TERMINAL")
+        self.assertEqual(terminal_label("EMX"), "ECT EUROMAX TERMINAL (EMX) · Rotterdam, Nederland (NLRTM)")
+        self.assertGreater(Terminal.objects.exclude(code="").count(), 1200)
+        self.assertGreater(Port.objects.count(), 17000)
         customer = Customer.objects.create(name="K")
-        shipment = SeaShipment.objects.create(customer=customer, container_number="CSQU3054383", terminal="KLOOSTERBOER VLISSINGEN")
-        Terminal.objects.create(name="Kloosterboer Vlissingen", port=Port.objects.get(locode="NLVLI"), aliases="KLOOSTERBOER VLISSINGEN")
+        shipment = SeaShipment.objects.create(customer=customer, container_number="CSQU3054383", terminal="KOELKADE NOORD")
+        Terminal.objects.create(name="Koelkade Noord Vlissingen", code="KKN", port=Port.objects.get(locode="NLVLI"), aliases="KOELKADE NOORD")
         shipment.refresh_from_db()
-        self.assertEqual(shipment.terminal, "Kloosterboer Vlissingen")
+        self.assertEqual(shipment.terminal, "Koelkade Noord Vlissingen (KKN)")
 
     def test_port_input_shows_full_name(self):
         from shipments.forms import SeaShipmentForm

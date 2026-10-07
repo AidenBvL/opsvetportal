@@ -18,7 +18,9 @@ class PortInput(forms.TextInput):
 
         list_id = f"ports-{name}"
         attrs = {**(attrs or {}), "list": list_id, "autocomplete": "off", "data-port-input": ""}
-        codes = sorted(port_index()["codes"])
+        index = port_index()
+        # Alleen containerhavens als suggestie (alle 17.000+ zeehavens worden wel herkend bij het opslaan).
+        codes = sorted((index["container"] & set(index["codes"])) | ({str(value).upper()} & set(index["codes"]) if value else set()))
         options = format_html_join("", '<option value="{}">{}</option>', ((code, port_full_name(code)) for code in codes))
         return super().render(name, value, attrs, renderer) + format_html(
             '<datalist id="{}">{}</datalist><div class="form-text port-name" data-port-name>{}</div>',
@@ -27,18 +29,25 @@ class PortInput(forms.TextInput):
 
 
 class TerminalInput(forms.TextInput):
-    """Tekstveld met de terminals uit Stamgegevens > Terminals als suggestie."""
+    """Tekstveld met terminals als suggestie (die van de loshaven, als die bekend is) en de volledige gegevens eronder."""
+
+    port = ""
 
     def render(self, name, value, attrs=None, renderer=None):
         from django.utils.html import format_html, format_html_join
 
-        from core.ports import port_index
+        from core.ports import port_index, terminal_label
 
         list_id = f"terminals-{name}"
-        names = sorted(set(port_index()["terminals"].values()))
-        options = format_html_join("", '<option value="{}"></option>', ((n,) for n in names))
+        terminals = port_index()["terminals"]
+        if self.port:
+            terminals = [t for t in terminals if t["locode"] == self.port] or terminals
+        options = format_html_join("", '<option value="{}">{}</option>', ((t["label"], t["locode"]) for t in terminals))
         attrs = {**(attrs or {}), "list": list_id, "autocomplete": "off"}
-        return super().render(name, value, attrs, renderer) + format_html('<datalist id="{}">{}</datalist>', list_id, options)
+        return super().render(name, value, attrs, renderer) + format_html(
+            '<datalist id="{}">{}</datalist><div class="form-text">{}</div>', list_id, options,
+            terminal_label(value, self.port) if value else "",
+        )
 
 
 def _dt(field_names):
@@ -78,6 +87,7 @@ class SeaShipmentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["terminal"].widget.port = self.instance.port_of_discharge or self.initial.get("port_of_discharge", "")
         self.fields["handler"].queryset = Employee.objects.filter(active=True)
         for name in ("customer", "shipping_line", "inspection_point"):
             qs = self.fields[name].queryset

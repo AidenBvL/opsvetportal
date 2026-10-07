@@ -3,6 +3,7 @@ from django.urls import path
 from .crud import crud_urls
 from .models import Customer, InspectionPoint, Port, RoadCarrier, ShippingLine, Terminal
 from . import views
+from .forms import TerminalForm
 
 app_name = "core"
 
@@ -43,17 +44,18 @@ urlpatterns = [
     ),
     *crud_urls(
         Port, "core", slug="havens",
-        fields=["locode", "name", "aliases", "active"],
-        list_display=["locode", "name", "aliases", "active"],
+        fields=["locode", "name", "aliases", "container_port", "active"],
+        list_display=["locode", "name", ("country_name", "land"), "aliases", "container_port", "active"],
         search_fields=["locode", "name", "aliases"],
-        list_filters=["active"],
+        list_filters=["container_port", "active"],
     ),
     *crud_urls(
         Terminal, "core", slug="terminals",
-        fields=["name", "port", "aliases", "active"],
-        list_display=["name", "port", "aliases", "active"],
-        search_fields=["name", "aliases", "port__name", "port__locode"],
-        list_filters=["port", "active"],
+        form_class=TerminalForm,
+        queryset=Terminal.objects.select_related("port"),
+        list_display=["code", "name", "port", ("country_name", "land"), "company", "active"],
+        search_fields=["name", "code", "company", "aliases", "port__name", "port__locode", "address"],
+        list_filters=["active"],
     ),
     path("accounts/", views.UserListView.as_view(), name="user_list"),
     path("accounts/nieuw/", views.UserCreateView.as_view(), name="user_create"),
