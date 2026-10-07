@@ -41,4 +41,5 @@ urlpatterns = [
     path("weg/<int:pk>/bewerken/", views.RoadUpdateView.as_view(), name="roadtransport_update"),
     path("weg/<int:pk>/verwijderen/", RoadDeleteView.as_view(), name="roadtransport_delete"),
     path("weg/<int:pk>/stap/<str:action>/", views.road_step, name="road_step"),
+    path("weg/<int:pk>/veld/", views.road_inline_update, name="road_inline"),
 ]

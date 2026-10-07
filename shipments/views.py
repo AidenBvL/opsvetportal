@@ -195,7 +195,7 @@ class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
             "lab_choices": SeaShipment._meta.get_field("lab_status").choices,
             "quick_selects": [
                 (name, label, SeaShipment._meta.get_field(name).choices, getattr(s, name))
-                for name, label in (("carrier_release", "Rederij"), ("local_charges", "Lokale kosten"), ("invoice_status", "Invoice"))
+                for name, label in (("carrier_release", "Rederij"), ("local_charges", "Lokale kosten"))
             ],
         })
         return context
@@ -278,17 +278,48 @@ class RoadListView(CrudListView):
     search_fields = ["customer_reference", "cory_reference", "truck_plate", "trailer_plate", "cmr_number", "customer__name",
                      "sea_shipment__container_number"]
     list_filters = ["status", "customer", "carrier", "direction", "inspection_status"]
+    paginate_by = 100
 
     def get_queryset(self):
-        qs = super().get_queryset().select_related("customer", "carrier", "sea_shipment", "inspection_point")
+        qs = road_list_data(super().get_queryset())
         if self.request.GET.get("weergave", "open") == "open":
             qs = qs.filter(status__in=RoadTransport.OPEN_STATUSES)
         return qs
 
     def get_context_data(self, **kwargs):
+        import json
+
         context = super().get_context_data(**kwargs)
         context["view"] = self.request.GET.get("weergave", "open")
+        if self.request.user.has_perm("shipments.change_roadtransport"):
+            from .inline import field_specs
+
+            context["inline_specs_json"] = json.dumps(field_specs(RoadTransport)).replace("</", "<\\/")
         return context
+
+
+def road_list_data(qs):
+    from django.db.models import Prefetch
+
+    return (qs.select_related("customer", "carrier", "sea_shipment", "inspection_point", "loading_address", "unloading_address")
+            .prefetch_related(Prefetch("stops", queryset=TransportStop.objects.select_related("inspection_point", "address"))))
+
+
+@require_POST
+@permission_required("shipments.change_roadtransport", raise_exception=True)
+def road_inline_update(request, pk):
+    """Eén veld van een wegtransport direct vanuit de lijst aanpassen; geeft de vernieuwde rij terug."""
+    from django.http import JsonResponse
+    from django.template.loader import render_to_string
+
+    from .inline import apply_edit
+
+    transport = get_object_or_404(RoadTransport, pk=pk)
+    ok, error = apply_edit(transport, request.POST.get("field", ""), request.POST.get("value", ""))
+    if not ok:
+        return JsonResponse({"ok": False, "error": error}, status=400)
+    transport = road_list_data(RoadTransport.objects.filter(pk=pk)).get()
+    return JsonResponse({"ok": True, "html": render_to_string("shipments/_road_row.html", {"obj": transport}, request=request)})
 
 
 class RoadDetailView(PermissionRequiredMixin, generic.DetailView):
@@ -496,7 +527,7 @@ def quick_update(request, pk):
     if "customs_cleared" in request.POST:
         shipment.customs_cleared = request.POST["customs_cleared"] == "1"
         changed.append("douane")
-    for name in ("lab_status", "carrier_release", "local_charges", "invoice_status"):
+    for name in ("lab_status", "carrier_release", "local_charges"):
         field = SeaShipment._meta.get_field(name)
         if request.POST.get(name) in dict(field.choices):
             setattr(shipment, name, request.POST[name])

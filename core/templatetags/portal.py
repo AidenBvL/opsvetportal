@@ -223,7 +223,7 @@ def terminal_datalist(list_id):
 
 
 @register.simple_tag
-def edit_value(shipment, field):
+def edit_value(obj, field):
     from shipments.inline import edit_value as value
 
-    return value(shipment, field)
+    return value(obj, field)
