@@ -209,8 +209,17 @@ class RoadDetailView(PermissionRequiredMixin, generic.DetailView):
     template_name = "shipments/road_detail.html"
 
     def get_context_data(self, **kwargs):
-        documents = self.object.documents.select_related("uploaded_by").defer("content", "extracted_text")
-        return super().get_context_data(history=history_for(self.object), documents=documents, doc_types=Document.TYPE_CHOICES, **kwargs)
+        t = self.object
+        documents = t.documents.select_related("uploaded_by").defer("content", "extracted_text")
+        stops = [
+            {"title": "Laden", "icon": "bi-box-arrow-up", "address": t.loading_address, "place": t.loading_place,
+             "reference": t.loading_reference, "when_label": "Gepland", "when": t.loading_at},
+            {"title": "Lossen", "icon": "bi-box-arrow-in-down", "address": t.unloading_address, "place": t.unloading_place,
+             "reference": t.unloading_reference, "when_label": "Levering gepland", "when": t.delivery_planned_at,
+             "until": t.delivery_window_until, "done": t.delivered_at},
+        ]
+        return super().get_context_data(history=history_for(t), documents=documents, doc_types=Document.TYPE_CHOICES,
+                                        stops=stops, **kwargs)
 
 
 class RoadCreateView(CrudCreateView):
@@ -225,12 +234,25 @@ class RoadCreateView(CrudCreateView):
         if sea_id:
             sea = SeaShipment.objects.filter(pk=sea_id).first()
             if sea:
+                from core.ports import port_label
+
                 initial.update({
                     "customer": sea.customer_id, "customer_reference": sea.customer_reference,
                     "cory_reference": sea.cory_reference, "inspection_required": sea.inspection_required,
                     "inspection_point": sea.inspection_point_id, "ched_number": sea.ched_number,
                     "goods_description": sea.goods_description, "temperature_setpoint": sea.temperature_setpoint,
+                    "gross_weight_kg": sea.gross_weight_kg, "direction": "import", "transport_type": "container",
+                    # De container staat op de terminal van de loshaven.
+                    "loading_place": f"{sea.terminal}, {port_label(sea.port_of_discharge)}" if sea.terminal else port_label(sea.port_of_discharge),
                 })
+        customer_id = initial.get("customer")
+        if customer_id and "unloading_address" not in initial:
+            from core.models import Address
+
+            default = Address.objects.filter(customer_id=customer_id, is_default=True, active=True).first()
+            if default:
+                initial.update({"unloading_address": default.pk, "unloading_place": default.one_line,
+                                "driver_instructions": default.instructions})
         return initial
 
 

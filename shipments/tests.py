@@ -415,7 +415,7 @@ class SafecubeTests(TestCase):
         self.assertEqual(self.shipment.eta.isoformat(), "2026-11-03T07:00:00+00:00")
         self.assertIsNone(self.shipment.ata)
         self.assertEqual(self.shipment.port_of_loading, "CNQDG")  # de UN/LOCODE die Safecube meegeeft
-        self.assertEqual(self.shipment.terminal, "ECT Euromax Terminal")  # "ECT Euromax" -> volledige naam
+        self.assertEqual(self.shipment.terminal, "ECT EUROMAX TERMINAL (EMX)")  # "ECT Euromax" -> officiële naam
 
     def test_no_info_yet_is_pending_and_timeout(self):
         resp = mock.Mock(status_code=200, json=lambda: {"message": "SEALINE_HASNT_PROVIDE_INFO"}, text="")
@@ -475,8 +475,8 @@ class PasteAndQuickUpdateTests(TestCase):
         self.assertEqual(r.status_code, 302)
         self.shipment.refresh_from_db()
         self.assertEqual(self.shipment.voyage, "0FAO2E1MA")
-        self.assertEqual(self.shipment.port_of_loading, "CNTAO")
-        self.assertEqual(self.shipment.terminal, "ECT Euromax Terminal")
+        self.assertEqual(self.shipment.port_of_loading, "CNQIN")
+        self.assertEqual(self.shipment.terminal, "ECT EUROMAX TERMINAL (EMX)")
         self.assertFalse(self.shipment.vessel_changed)
         self.assertIsNotNone(self.shipment.departed_at)
         self.assertEqual(self.shipment.tracking_updates.get().provider, "geplakt")
@@ -497,7 +497,7 @@ class PasteAndQuickUpdateTests(TestCase):
         self.assertEqual(local(self.shipment.ata), "03-10 13:00")
         self.assertEqual(local(self.shipment.discharged_at), "03-10 17:26")
         self.assertEqual(local(self.shipment.departed_at), "11-09 22:33")
-        self.assertEqual((self.shipment.voyage, self.shipment.terminal), ("0EWORS1MA", "Hutchison Ports Delta II"))
+        self.assertEqual((self.shipment.voyage, self.shipment.terminal), ("0EWORS1MA", "HUTCHISON DELTA II ROTTERDAM (HPD2)"))
         self.assertEqual((self.shipment.port_of_loading, self.shipment.port_of_discharge), ("BRPNG", "NLRTM"))
         self.assertEqual(self.shipment.status, "uitgeleverd")
         self.assertFalse(self.shipment.vessel_changed)
@@ -537,3 +537,68 @@ class VesselImoTests(TestCase):
         s.refresh_from_db()
         self.assertTrue(s.vessel_changed)
         self.assertEqual(s.vessel_imo, "")
+
+
+class RoadAddressTests(TestCase):
+    def setUp(self):
+        from core.models import Address
+
+        self.client.force_login(User.objects.create_superuser("admin", "a@example.com", "pw"))
+        self.customer = Customer.objects.create(name="J.A. Ter Maten")
+        self.address = Address.objects.create(
+            name="Ter Maten Bunschoten", customer=self.customer, is_default=True, company="J.A. Ter Maten",
+            street="De Kooihoek 7", postal_code="3751 LZ", city="Bunschoten", opening_hours="ma-vr 06:00-14:00",
+            booking_required=True, instructions="Melden bij portier, dock 3.",
+        )
+        self.sea = SeaShipment.objects.create(customer=self.customer, container_number="SEGU9074220",
+                                              terminal="ECT EUROMAX", port_of_discharge="NLRTM", gross_weight_kg="22909.950")
+
+    def test_plan_from_sea_shipment_prefills_addresses(self):
+        form = self.client.get(f"/zendingen/weg/nieuw/?sea_shipment={self.sea.pk}").context["form"]
+        self.assertEqual(form.initial["unloading_address"], self.address.pk)
+        self.assertEqual(form.initial["unloading_place"], "J.A. Ter Maten, De Kooihoek 7, 3751 LZ Bunschoten, Nederland")
+        self.assertIn("ECT EUROMAX TERMINAL (EMX)", form.initial["loading_place"])
+        self.assertIn("Rotterdam, Nederland (NLRTM)", form.initial["loading_place"])
+        self.assertEqual(form.initial["direction"], "import")
+
+    def test_address_choice_fills_place_and_detail_page(self):
+        from .models import RoadTransport
+
+        r = self.client.post("/zendingen/weg/nieuw/", {
+            "customer": self.customer.pk, "direction": "import", "transport_type": "container", "status": "gepland",
+            "inspection_status": "aan_te_melden", "unloading_address": self.address.pk, "unloading_reference": "PO-123",
+        })
+        self.assertEqual(r.status_code, 302, getattr(r, "context", None) and r.context["form"].errors)
+        transport = RoadTransport.objects.get()
+        self.assertEqual(transport.unloading_place, self.address.one_line)
+        self.assertEqual(transport.driver_instructions, "Melden bij portier, dock 3.")
+        page = self.client.get(f"/zendingen/weg/{transport.pk}/")
+        self.assertContains(page, "ma-vr 06:00-14:00")
+        self.assertContains(page, "vooraf aanmelden verplicht")
+        self.assertContains(page, "PO-123")
+        self.assertContains(page, "google.com/maps")
+
+    def test_save_typed_address_to_address_book(self):
+        from core.models import Address
+
+        from .models import RoadTransport
+
+        self.client.post("/zendingen/weg/nieuw/", {
+            "customer": self.customer.pk, "direction": "import", "transport_type": "container", "status": "gepland",
+            "inspection_status": "aan_te_melden", "unloading_place": "Kloosterboer Coldstore, Kanaalweg 5, 4389 PB Vlissingen",
+            "save_unloading_address": "on",
+        })
+        transport = RoadTransport.objects.get()
+        address = transport.unloading_address
+        self.assertEqual((address.company, address.street, address.postal_code, address.city),
+                         ("Kloosterboer Coldstore", "Kanaalweg 5", "4389 PB", "Vlissingen"))
+        self.assertEqual(address.customer, self.customer)
+        self.assertEqual(Address.objects.count(), 2)
+
+    def test_one_default_address_per_customer(self):
+        from core.models import Address
+
+        second = Address.objects.create(name="Tweede", customer=self.customer, city="Urk", is_default=True)
+        self.address.refresh_from_db()
+        self.assertFalse(self.address.is_default)
+        self.assertTrue(second.is_default)

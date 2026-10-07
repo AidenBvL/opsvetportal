@@ -118,7 +118,7 @@ class SeaShipment(TimeStampedModel):
         self.container_number = normalize_container_number(self.container_number)
         self.port_of_loading = port_code(self.port_of_loading)
         self.port_of_discharge = port_code(self.port_of_discharge) or "NLRTM"
-        self.terminal = terminal_name(self.terminal)
+        self.terminal = terminal_name(self.terminal, self.port_of_discharge)
         if self.vessel_name and not self.original_vessel_name:
             self.original_vessel_name = self.vessel_name
         if self.eta and not self.eta_original:
@@ -200,7 +200,16 @@ class TrackingUpdate(models.Model):
 
 
 class RoadTransport(TimeStampedModel):
-    DIRECTION_CHOICES = [("import", "Import (vanaf haven/keurpunt)"), ("export", "Export"), ("nationaal", "Nationaal / overig")]
+    DIRECTION_CHOICES = [
+        ("import", "Import: haven/keurpunt → klant"),
+        ("export", "Export: klant → haven"),
+        ("nationaal", "Binnenland / overig"),
+    ]
+    TYPE_CHOICES = [
+        ("container", "Containertransport (container op chassis)"),
+        ("koeltrailer", "Koeltrailer / losse lading"),
+        ("overig", "Overig"),
+    ]
     STATUS_CHOICES = [
         ("gepland", "Gepland"),
         ("onderweg", "Onderweg"),
@@ -214,7 +223,11 @@ class RoadTransport(TimeStampedModel):
     customer = models.ForeignKey("core.Customer", verbose_name="klant", on_delete=models.PROTECT, related_name="road_transports")
     customer_reference = models.CharField("klantreferentie", max_length=100, blank=True)
     cory_reference = models.CharField("Cory referentie", max_length=100, blank=True, db_index=True)
-    direction = models.CharField("richting", max_length=20, choices=DIRECTION_CHOICES, default="import")
+    direction = models.CharField(
+        "richting", max_length=20, choices=DIRECTION_CHOICES, default="import",
+        help_text="Import: de container wordt opgehaald bij de terminal (eventueel via het keurpunt) en bij de klant gelost.",
+    )
+    transport_type = models.CharField("soort transport", max_length=20, choices=TYPE_CHOICES, default="container")
     carrier = models.ForeignKey(
         "core.RoadCarrier", verbose_name="vervoerder", null=True, blank=True, on_delete=models.PROTECT, related_name="transports"
     )
@@ -227,11 +240,23 @@ class RoadTransport(TimeStampedModel):
     driver_phone = models.CharField("telefoon chauffeur", max_length=50, blank=True)
     cmr_number = models.CharField("CMR-nummer", max_length=60, blank=True)
 
-    loading_place = models.CharField("laadadres", max_length=250, blank=True)
+    loading_address = models.ForeignKey(
+        "core.Address", verbose_name="laadadres uit adresboek", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    loading_place = models.CharField("laadadres", max_length=250, blank=True, help_text="Bijv. de terminal waar de container staat.")
+    loading_reference = models.CharField("referentie ophalen", max_length=100, blank=True, help_text="Pincode / release- of pick-upreferentie.")
     loading_at = models.DateTimeField("laden gepland", null=True, blank=True)
+    unloading_address = models.ForeignKey(
+        "core.Address", verbose_name="losadres uit adresboek", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
     unloading_place = models.CharField("losadres", max_length=250, blank=True)
+    unloading_reference = models.CharField("referentie lossen", max_length=100, blank=True, help_text="Ordernummer of tijdslot bij de ontvanger.")
     delivery_planned_at = models.DateTimeField("levering gepland", null=True, blank=True)
+    delivery_window_until = models.DateTimeField("levering uiterlijk", null=True, blank=True, help_text="Einde van het tijdvenster.")
     delivered_at = models.DateTimeField("geleverd op", null=True, blank=True)
+    driver_instructions = models.TextField("instructies voor de chauffeur", blank=True)
+    empty_return_place = models.CharField("lege container retour naar", max_length=200, blank=True, help_text="Depot of terminal.")
+    empty_return_by = models.DateField("lege retour uiterlijk", null=True, blank=True)
 
     inspection_required = models.BooleanField("keuringsplichtig", default=True)
     inspection_point = models.ForeignKey(
@@ -265,6 +290,13 @@ class RoadTransport(TimeStampedModel):
     def save(self, *args, **kwargs):
         if not self.inspection_required:
             self.inspection_status = "n.v.t."
+        # Een gekozen adres uit het adresboek vult het adresveld (als dat nog leeg is).
+        if self.loading_address_id and not self.loading_place:
+            self.loading_place = self.loading_address.one_line[:250]
+        if self.unloading_address_id and not self.unloading_place:
+            self.unloading_place = self.unloading_address.one_line[:250]
+        if self.unloading_address_id and not self.driver_instructions and self.unloading_address.instructions:
+            self.driver_instructions = self.unloading_address.instructions
         super().save(*args, **kwargs)
 
     @property

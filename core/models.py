@@ -214,6 +214,10 @@ class Port(TimeStampedModel):
         "andere schrijfwijzen", max_length=300, blank=True,
         help_text="Komma-gescheiden namen zoals ze op B/L's of trackingpagina's staan, bijv. ANTWERP, ANVERS.",
     )
+    container_port = models.BooleanField(
+        "containerhaven", default=False,
+        help_text="Komt in de suggesties en gaat voor bij havens met dezelfde naam (bijv. Manzanillo).",
+    )
     active = models.BooleanField("actief", default=True)
 
     class Meta:
@@ -227,6 +231,12 @@ class Port(TimeStampedModel):
     @property
     def country(self):
         return self.locode[:2]
+
+    @property
+    def country_name(self):
+        from .data.countries import COUNTRY_NAMES
+
+        return COUNTRY_NAMES.get(self.country, self.country)
 
     def save(self, *args, **kwargs):
         from .ports import clear_cache, recode_shipments
@@ -247,8 +257,12 @@ class Port(TimeStampedModel):
 class Terminal(TimeStampedModel):
     """Containerterminal. Varianten uit tracking ("ECT EUROMAX ROTTERDAM") worden de volledige naam."""
 
-    name = models.CharField("volledige naam", max_length=150, unique=True)
+    name = models.CharField("volledige naam", max_length=150)
+    code = models.CharField("terminalcode (SMDG)", max_length=10, blank=True, help_text="Bijv. EMX voor ECT Euromax.")
     port = models.ForeignKey(Port, verbose_name="haven", null=True, blank=True, on_delete=models.SET_NULL, related_name="terminals")
+    company = models.CharField("bedrijf", max_length=150, blank=True)
+    address = models.CharField("adres", max_length=250, blank=True)
+    website = models.URLField("website", max_length=250, blank=True)
     aliases = models.CharField(
         "andere schrijfwijzen", max_length=400, blank=True,
         help_text="Komma-gescheiden, zoals rederijen en trackingdiensten de terminal noemen, bijv. ECT EUROMAX ROTTERDAM, EUROMAX.",
@@ -256,12 +270,26 @@ class Terminal(TimeStampedModel):
     active = models.BooleanField("actief", default=True)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["port__locode", "name"]
         verbose_name = "terminal"
         verbose_name_plural = "terminals"
+        constraints = [
+            models.UniqueConstraint(fields=["port", "code"], condition=~models.Q(code=""), name="unique_terminal_code_per_port"),
+        ]
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.code})" if self.code and f"({self.code})" not in self.name else self.name
+
+    @property
+    def country_name(self):
+        return self.port.country_name if self.port_id else ""
+
+    @property
+    def label(self):
+        """"ECT EUROMAX TERMINAL (EMX) · Rotterdam, Nederland (NLRTM)"."""
+        from .ports import port_label
+
+        return f"{self} · {port_label(self.port.locode)}" if self.port_id else str(self)
 
     def save(self, *args, **kwargs):
         from .ports import clear_cache, recode_shipments
@@ -276,6 +304,62 @@ class Terminal(TimeStampedModel):
         result = super().delete(*args, **kwargs)
         clear_cache()
         return result
+
+
+class Address(TimeStampedModel):
+    """Laad- of losadres voor wegtransport, met de vaste afspraken (tijden, aanmelden, instructies)."""
+
+    KIND_CHOICES = [("los", "Losadres"), ("laad", "Laadadres"), ("beide", "Laad- en losadres")]
+
+    name = models.CharField("naam", max_length=100, help_text="Korte naam om te kiezen, bijv. 'Ter Maten Bunschoten'.")
+    customer = models.ForeignKey(
+        Customer, verbose_name="klant", null=True, blank=True, on_delete=models.CASCADE, related_name="addresses",
+        help_text="Leeg laten voor een adres dat voor meerdere klanten gebruikt wordt (bijv. een koelhuis).",
+    )
+    kind = models.CharField("soort", max_length=10, choices=KIND_CHOICES, default="los")
+    is_default = models.BooleanField("standaard losadres van deze klant", default=False)
+    company = models.CharField("bedrijfsnaam", max_length=150, blank=True)
+    street = models.CharField("straat + huisnummer", max_length=150, blank=True)
+    postal_code = models.CharField("postcode", max_length=20, blank=True)
+    city = models.CharField("plaats", max_length=100)
+    country = models.CharField("land", max_length=100, default="Nederland")
+    contact_name = models.CharField("contactpersoon", max_length=100, blank=True)
+    phone = models.CharField("telefoon", max_length=50, blank=True)
+    email = models.EmailField("e-mail", blank=True)
+    opening_hours = models.CharField("ontvangsttijden", max_length=200, blank=True, help_text="Bijv. ma-vr 06:00-15:00.")
+    booking_required = models.BooleanField("tijdslot / vooraanmelding verplicht", default=False)
+    instructions = models.TextField(
+        "instructies voor de chauffeur", blank=True, help_text="Bijv. melden bij portier, dock 4, max. 13,6 m, pallets ruilen.",
+    )
+    active = models.BooleanField("actief", default=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "adres"
+        verbose_name_plural = "adressen"
+
+    def __str__(self):
+        return f"{self.name} ({self.city})" if self.city and self.city.lower() not in self.name.lower() else self.name
+
+    @property
+    def lines(self):
+        return [line for line in [self.company, self.street, " ".join(p for p in [self.postal_code, self.city] if p), self.country] if line]
+
+    @property
+    def one_line(self):
+        return ", ".join(self.lines)
+
+    @property
+    def maps_url(self):
+        from urllib.parse import quote
+
+        return "https://www.google.com/maps/search/?api=1&query=" + quote(", ".join(self.lines[1:] or self.lines))
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_default and self.customer_id:
+            # Eén standaard losadres per klant.
+            Address.objects.filter(customer_id=self.customer_id, is_default=True).exclude(pk=self.pk).update(is_default=False)
 
 
 class JobRun(models.Model):

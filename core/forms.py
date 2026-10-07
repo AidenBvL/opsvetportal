@@ -2,6 +2,8 @@ from django import forms
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.password_validation import validate_password
 
+from .models import Terminal
+
 PORTAL_APPS = ["core", "planning", "meetings", "actions", "shipments", "documents", "auth"]
 ACTION_LABELS = {"view": "bekijken", "add": "toevoegen", "change": "wijzigen", "delete": "verwijderen"}
 
@@ -127,3 +129,17 @@ class CustomerAccountForm(forms.Form):
         if User.objects.filter(username__iexact=email).exists():
             raise forms.ValidationError("Er bestaat al een account met dit e-mailadres.")
         return email
+
+
+class TerminalForm(forms.ModelForm):
+    class Meta:
+        model = Terminal
+        fields = ["name", "code", "port", "company", "address", "website", "aliases", "active"]
+
+    def __init__(self, *args, **kwargs):
+        from django.db.models import Q
+
+        super().__init__(*args, **kwargs)
+        # Alleen containerhavens in de keuzelijst (er zijn er 17.000+), plus de huidige haven.
+        current = Q(pk=self.instance.port_id) if self.instance.port_id else Q(pk__in=[])
+        self.fields["port"].queryset = self.fields["port"].queryset.filter(Q(container_port=True) | current)

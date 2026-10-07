@@ -24,6 +24,14 @@
       </dl>
       {% if object.notes %}<hr><div class="small" style="white-space:pre-wrap">{{ object.notes }}</div>{% endif %}
     </div></div>
+    <div class="card mb-3"><div class="card-header d-flex align-items-center"><span><i class="bi bi-geo"></i> Laad-/losadressen</span>
+      {% if perms.core.add_address %}<a class="ms-auto small" href="{% url 'core:address_create' %}?customer={{ object.pk }}"><i class="bi bi-plus-lg"></i> Adres</a>{% endif %}</div>
+      <div class="list-group list-group-flush">
+        {% for a in addresses %}<a class="list-group-item list-group-item-action small" href="{% if perms.core.change_address %}{% url 'core:address_update' a.pk %}{% else %}#{% endif %}">
+          <div class="d-flex"><span class="fw-semibold">{{ a.name }}</span>{% if a.is_default %}<span class="chip chip-info ms-auto">standaard</span>{% endif %}</div>
+          <div class="text-body-secondary">{{ a.one_line }}{% if a.opening_hours %} · {{ a.opening_hours }}{% endif %}</div></a>
+        {% empty %}<div class="list-group-item small text-body-secondary">Nog geen vaste adressen. Voeg het losadres toe, dan staat het klaar bij elk transport.</div>{% endfor %}
+      </div></div>
     <div class="card mb-3"><div class="card-header">Extra kosten (totaal)</div><div class="card-body">{% include "core/_cost_totals.html" %}</div></div>
     {% if perms.auth.view_user %}
     <div class="card mb-3" id="klantportaal"><div class="card-header"><i class="bi bi-globe"></i> Klantportaal-accounts</div>

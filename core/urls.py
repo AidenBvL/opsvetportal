@@ -1,8 +1,9 @@
 from django.urls import path
 
 from .crud import crud_urls
-from .models import Customer, InspectionPoint, Port, RoadCarrier, ShippingLine, Terminal
+from .models import Address, Customer, InspectionPoint, Port, RoadCarrier, ShippingLine, Terminal
 from . import views
+from .forms import TerminalForm
 
 app_name = "core"
 
@@ -42,18 +43,28 @@ urlpatterns = [
         list_filters=["point_type"],
     ),
     *crud_urls(
+        Address, "core", slug="adressen",
+        fields=["name", "customer", "kind", "is_default", "company", "street", "postal_code", "city", "country", "contact_name",
+                "phone", "email", "opening_hours", "booking_required", "instructions", "active"],
+        list_display=["name", "customer", "kind", "city", "opening_hours", "is_default", "active"],
+        search_fields=["name", "company", "street", "city", "customer__name"],
+        list_filters=["kind", "customer", "active"],
+        queryset=Address.objects.select_related("customer"),
+    ),
+    *crud_urls(
         Port, "core", slug="havens",
-        fields=["locode", "name", "aliases", "active"],
-        list_display=["locode", "name", "aliases", "active"],
+        fields=["locode", "name", "aliases", "container_port", "active"],
+        list_display=["locode", "name", ("country_name", "land"), "aliases", "container_port", "active"],
         search_fields=["locode", "name", "aliases"],
-        list_filters=["active"],
+        list_filters=["container_port", "active"],
     ),
     *crud_urls(
         Terminal, "core", slug="terminals",
-        fields=["name", "port", "aliases", "active"],
-        list_display=["name", "port", "aliases", "active"],
-        search_fields=["name", "aliases", "port__name", "port__locode"],
-        list_filters=["port", "active"],
+        form_class=TerminalForm,
+        queryset=Terminal.objects.select_related("port"),
+        list_display=["code", "name", "port", ("country_name", "land"), "company", "active"],
+        search_fields=["name", "code", "company", "aliases", "port__name", "port__locode", "address"],
+        list_filters=["active"],
     ),
     path("accounts/", views.UserListView.as_view(), name="user_list"),
     path("accounts/nieuw/", views.UserCreateView.as_view(), name="user_create"),

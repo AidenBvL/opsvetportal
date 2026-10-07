@@ -111,6 +111,7 @@ class CustomerDetailView(PermissionRequiredMixin, generic.DetailView):
                 "documents": c.documents.all()[:10],
                 "history": history_for(c),
                 "portal_users": User.objects.filter(profile__customer=c).order_by("email"),
+                "addresses": c.addresses.filter(active=True).order_by("-is_default", "name"),
             }
         )
         return context
