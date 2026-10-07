@@ -44,6 +44,16 @@ def sea_view_filter(qs, view):
     }.get(view, open_qs)
 
 
+def _sea_specs_json(user):
+    import json
+
+    if not user.has_perm("shipments.change_seashipment"):
+        return ""
+    from .inline import field_specs
+
+    return json.dumps(field_specs()).replace("</", "<\\/")
+
+
 def with_list_data(qs):
     """Alles wat de zeevrachtlijst per rij nodig heeft in één keer ophalen (transport, tussenstops, aantallen)."""
     from django.db.models import Count, Prefetch
@@ -89,10 +99,7 @@ class SeaListView(CrudListView):
         context["visible_keys"] = visible
         context["presets_json"] = json.dumps({key: {"label": label, "columns": cols} for key, (label, cols) in PRESETS.items()})
         context["presets"] = [(key, label) for key, (label, _cols) in PRESETS.items()]
-        if self.request.user.has_perm("shipments.change_seashipment"):
-            from .inline import field_specs
-
-            context["inline_specs_json"] = json.dumps(field_specs()).replace("</", "<\\/")
+        context["inline_specs_json"] = _sea_specs_json(self.request.user)
         return context
 
     def render_to_response(self, context, **kwargs):
@@ -145,6 +152,13 @@ def inline_update(request, pk):
         return JsonResponse({"ok": False, "error": error}, status=400)
     # Opnieuw ophalen met dezelfde gegevens als de lijst (transport, aantallen), zodat ook 'Aandacht' klopt.
     shipment = with_list_data(SeaShipment.objects.filter(pk=pk)).get()
+    if request.POST.get("view") == "detail":
+        context = {"object": shipment}
+        fragments = {name: render_to_string(f"shipments/_sea_{name}.html", context, request=request)
+                     for name in ("voyage", "attention")}
+        fragments["badges"] = f'<span id="sea-badges" class="d-inline-flex gap-1">{render_to_string("shipments/_sea_badges.html", context, request=request)}</span>'
+        html = render_to_string("shipments/_sea_details.html", context, request=request)
+        return JsonResponse({"ok": True, "html": html, "fragments": fragments})
     columns, _compact = user_columns(request.user)
     html = render_to_string("shipments/_sea_row.html", {"s": shipment, "columns": columns}, request=request)
     return JsonResponse({"ok": True, "html": html})
@@ -187,6 +201,7 @@ class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
             "costs": s.extra_costs.all(),
             "road": s.road_transports.select_related("carrier").prefetch_related("stops__inspection_point", "stops__address"),
             "documents": s.documents.select_related("uploaded_by").defer("content", "extracted_text"),
+            "inline_specs_json": _sea_specs_json(self.request.user),
             "doc_types": Document.TYPE_CHOICES,
             "meeting_items": s.meeting_items.select_related("meeting")[:10],
             "history": history_for(s),
@@ -195,7 +210,7 @@ class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
             "lab_choices": SeaShipment._meta.get_field("lab_status").choices,
             "quick_selects": [
                 (name, label, SeaShipment._meta.get_field(name).choices, getattr(s, name))
-                for name, label in (("carrier_release", "Rederij"), ("local_charges", "Lokale kosten"))
+                for name, label in (("customs_status", "Douane"), ("carrier_release", "Release"), ("local_charges", "Factuur"))
             ],
         })
         return context
@@ -524,10 +539,7 @@ def quick_update(request, pk):
     if request.POST.get("inspection_status") in dict(INSPECTION_STATUS_CHOICES):
         shipment.inspection_status = request.POST["inspection_status"]
         changed.append("keuringsstatus")
-    if "customs_cleared" in request.POST:
-        shipment.customs_cleared = request.POST["customs_cleared"] == "1"
-        changed.append("douane")
-    for name in ("lab_status", "carrier_release", "local_charges"):
+    for name in ("lab_status", "carrier_release", "local_charges", "customs_status"):
         field = SeaShipment._meta.get_field(name)
         if request.POST.get(name) in dict(field.choices):
             setattr(shipment, name, request.POST[name])

@@ -20,7 +20,7 @@
     <i class="bi {{ d.icon }} doc-icon"></i>
     <div class="doc-name">
       <a class="fw-semibold" href="{% url 'documents:file' d.pk %}" target="_blank" rel="noopener">{{ d }}</a>
-      <div class="small text-body-secondary">{{ d.get_doc_type_display }} · {{ d.created_at|date:"j M Y H:i" }}{% if d.uploaded_by %} · {{ d.uploaded_by.get_full_name|default:d.uploaded_by.username }}{% endif %}{% if d.status == "fout" %} · <span class="text-warning-emphasis" title="{{ d.error }}">tekst niet herkend</span>{% endif %}</div>
+      <div class="small text-body-secondary">{{ d.get_doc_type_display }} · {{ d.created_at|date:"d-m-Y H:i" }}{% if d.uploaded_by %} · {{ d.uploaded_by.get_full_name|default:d.uploaded_by.username }}{% endif %}{% if d.status == "fout" %} · <span class="text-warning-emphasis" title="{{ d.error }}">tekst niet herkend</span>{% endif %}</div>
     </div>
     <div class="d-flex gap-1 flex-shrink-0">
       {% if kind == "zee" and perms.documents.change_document and d.extracted_data.containers %}<a class="btn btn-sm btn-outline-primary" href="{% url 'documents:review' d.pk %}" title="Herkende gegevens (schip, reis, B/L, ...) controleren en in het dossier zetten"><i class="bi bi-magic"></i><span class="d-none d-md-inline"> Gegevens overnemen</span></a>{% endif %}

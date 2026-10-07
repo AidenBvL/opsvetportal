@@ -1,0 +1,35 @@
+{% load portal %}<div id="sea-voyage">
+<div class="card mb-3"><div class="card-body">
+  <div class="row g-3 align-items-center">
+    <div class="col-lg-8">
+      <div class="voyage">
+        <div class="voyage-port" title="{{ object.port_of_loading|port }}">{{ object.port_of_loading|port_full|default:"Laadhaven ?" }} <span class="small text-body-secondary font-monospace">{{ object.port_of_loading }}</span><small>{% if object.departed_at %}vertrokken {{ object.departed_at|date:"j M" }}{% else %}vertrek onbekend{% endif %}</small></div>
+        <div class="voyage-track" title="{% if object.voyage_progress is not None %}{{ object.voyage_progress }}% van de reis{% endif %}">
+          {% if object.voyage_progress is not None %}<span style="width: {{ object.voyage_progress }}%"></span><div class="voyage-ship" style="left: {{ object.voyage_progress }}%"><i class="bi bi-water"></i></div>{% endif %}
+        </div>
+        <div class="voyage-port text-end" title="{{ object.port_of_discharge|port }}">{{ object.port_of_discharge|port_full }} <span class="small text-body-secondary font-monospace">{{ object.port_of_discharge }}</span><small>{{ object.terminal|default:"terminal onbekend" }}</small></div>
+      </div>
+      <div class="small text-body-secondary mt-2">
+        <i class="bi bi-life-preserver"></i> {{ object.shipping_line|default:"rederij onbekend" }} ·
+        <span{% if object.vessel_changed %} class="vessel-changed"{% endif %}>{{ object.vessel_name|default:"schip onbekend" }}</span>{% if object.vessel_imo %} (IMO {{ object.vessel_imo }}){% endif %}{% if object.voyage %} · reis <span class="font-monospace">{{ object.voyage }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="d-flex gap-4 justify-content-lg-end">
+        <div>
+          <div class="small text-body-secondary">{% if object.ata %}Aangekomen{% else %}ETA{% endif %}</div>
+          {% if object.ata %}<div class="countdown text-success"><i class="bi bi-check2-circle"></i></div><div class="small">{{ object.ata|date:"D j M H:i" }}</div>
+          {% elif object.eta %}<div class="countdown">{% if object.days_to_eta is not None and object.days_to_eta >= 0 %}{{ object.days_to_eta }}<small class="fs-6 fw-normal text-body-secondary"> d</small>{% else %}<span class="text-warning-emphasis">!</span>{% endif %}</div><div class="small">{{ object.eta|date:"D j M H:i" }}{% if object.eta_delay_hours %} <span class="chip chip-{% if object.eta_delay_hours > 0 %}warning{% else %}info{% endif %}">{% if object.eta_delay_hours > 0 %}+{% endif %}{{ object.eta_delay_hours }}u</span>{% endif %}</div>
+          {% else %}<div class="countdown text-body-secondary">–</div><div class="small text-body-secondary">nog onbekend</div>{% endif %}
+        </div>
+        <div>
+          <div class="small text-body-secondary">Vrije dagen</div>
+          {% if object.free_days_left is not None %}<div class="countdown{% if object.free_days_left <= 0 %} text-danger{% elif object.free_days_left <= 2 %} text-warning-emphasis{% endif %}">{{ object.free_days_left }}<small class="fs-6 fw-normal text-body-secondary"> d</small></div><div class="small">t/m {{ object.free_time_until|date:"D j M" }}</div>
+          {% else %}<div class="countdown text-body-secondary">–</div><div class="small text-body-secondary">niet ingevuld</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+</div>

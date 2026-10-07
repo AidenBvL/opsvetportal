@@ -12,7 +12,7 @@
   <td>{% if u.is_superuser %}<span class="badge text-bg-danger">Beheerder (alles)</span>{% endif %}{% for g in u.groups.all %}<span class="badge text-bg-secondary">{{ g }}</span> {% endfor %}</td>
   <td>{{ u.employee|default:"-" }}</td>
   <td>{% if u.is_active %}<span class="badge text-bg-success">actief</span>{% else %}<span class="badge text-bg-light text-dark">geblokkeerd</span>{% endif %}</td>
-  <td class="small">{{ u.last_login|date:"j M Y H:i"|default:"nooit" }}</td></tr>{% endfor %}
+  <td class="small">{{ u.last_login|date:"d-m-Y H:i"|default:"nooit" }}</td></tr>{% endfor %}
 </table></div></div>
 <div class="col-lg-4"><div class="card"><div class="card-header d-flex">Rollen{% if perms.auth.add_group %}<a class="ms-auto small" href="{% url 'core:group_create' %}">+ nieuwe rol</a>{% endif %}</div>
 <ul class="list-group list-group-flush">{% for g in groups %}<li class="list-group-item d-flex">{% if perms.auth.change_group %}<a href="{% url 'core:group_update' g.pk %}">{{ g.name }}</a>{% else %}{{ g.name }}{% endif %}<span class="ms-auto small text-muted">{{ g.n_users }} account(s) · {{ g.n_perms }} rechten</span></li>{% empty %}<li class="list-group-item text-muted">Nog geen rollen. Draai <code>manage.py setup_roles</code>.</li>{% endfor %}</ul>
