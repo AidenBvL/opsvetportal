@@ -344,3 +344,7 @@ th[data-sort].desc::after { content: "\2193"; opacity: .9; }
 .sea-table th:hover .col-hide, .sea-table th .col-hide:focus-visible { opacity: 1; }
 .sea-table th .col-hide:hover { color: var(--bs-danger); }
 @media (hover: none) { .sea-table th .col-hide { opacity: .6; } }
+
+/* Formulier rond header/body/footer in een scrollbare modal: laat de body scrollen i.p.v. de pagina te laten overlopen. */
+.modal-dialog-scrollable .modal-content > form { display: flex; flex-direction: column; min-height: 0; max-height: 100%; overflow: hidden; }
+.modal-dialog-scrollable .modal-content > form > .modal-body { overflow-y: auto; min-height: 0; }
