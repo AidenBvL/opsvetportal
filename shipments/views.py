@@ -210,7 +210,7 @@ class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
             "lab_choices": SeaShipment._meta.get_field("lab_status").choices,
             "quick_selects": [
                 (name, label, SeaShipment._meta.get_field(name).choices, getattr(s, name))
-                for name, label in (("customs_status", "Douane"), ("carrier_release", "Release / DO"), ("local_charges", "Lokale kosten"))
+                for name, label in (("customs_status", "Douane"), ("carrier_release", "Release"), ("local_charges", "Factuur"))
             ],
         })
         return context

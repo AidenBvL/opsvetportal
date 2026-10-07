@@ -89,26 +89,22 @@ class SeaShipment(TimeStampedModel):
     ], default="open")
     # Vrijgave bij de rederij en lokale kosten: pas als dit rond is kan de container worden uitgehaald.
     # Release / delivery order van de rederij (tegenwoordig meestal via Portbase).
-    carrier_release = models.CharField("release / delivery order", max_length=20, choices=[
-        ("open", "Nog geen release"),
-        ("aangevraagd", "Release aangevraagd"),
-        ("vrij", "Release / DO ontvangen"),
+    carrier_release = models.CharField("release", max_length=20, choices=[
+        ("open", "Nog niet ontvangen"),
+        ("aangevraagd", "Opgevraagd"),
+        ("vrij", "Vrijgesteld"),
     ], default="open")
     carrier_released_at = models.DateTimeField("release ontvangen op", null=True, blank=True)
     release_reference = models.CharField("referentie release / DO", max_length=60, blank=True,
                                          help_text="Bijv. het delivery-ordernummer of de Portbase-referentie.")
-    # Lokale kosten = de factuur van de rederij (THC, documentkosten, ...): opvragen, ontvangen, betalen.
-    local_charges = models.CharField("lokale kosten (factuur rederij)", max_length=20, choices=[
-        ("onbekend", "Factuur nog niet opgevraagd"),
-        ("opgevraagd", "Factuur opgevraagd"),
-        ("ontvangen", "Factuur ontvangen, te betalen"),
-        ("betaald", "Betaald"),
-        ("geen", "Geen lokale kosten"),
+    # Factuur van de rederij (lokale kosten).
+    local_charges = models.CharField("factuur", max_length=20, choices=[
+        ("onbekend", "Nog niet ontvangen"),
+        ("opgevraagd", "Opgevraagd"),
+        ("ontvangen", "Ontvangen"),
     ], default="onbekend")
-    local_charges_amount = models.DecimalField("bedrag lokale kosten (€)", max_digits=10, decimal_places=2, null=True, blank=True)
     invoice_requested_at = models.DateTimeField("factuur opgevraagd op", null=True, blank=True)
     invoice_received_at = models.DateTimeField("factuur ontvangen op", null=True, blank=True)
-    local_charges_paid_at = models.DateTimeField("lokale kosten betaald op", null=True, blank=True)
     lab_status = models.CharField("labonderzoek", max_length=20, choices=[
         ("geen", "Geen labonderzoek"),
         ("monster", "Monster genomen, wacht op uitslag"),
@@ -167,16 +163,10 @@ class SeaShipment(TimeStampedModel):
         now = timezone.now()
         stamps = [("lab_status", "monster", "lab_sampled_at"), ("lab_status", "goed", "lab_result_at"),
                   ("lab_status", "afgekeurd", "lab_result_at"), ("carrier_release", "vrij", "carrier_released_at"),
-                  ("local_charges", "opgevraagd", "invoice_requested_at"), ("local_charges", "ontvangen", "invoice_received_at"),
-                  ("local_charges", "betaald", "local_charges_paid_at")]
+                  ("local_charges", "opgevraagd", "invoice_requested_at"), ("local_charges", "ontvangen", "invoice_received_at")]
         for field, value, stamp in stamps:
             if getattr(self, field) == value and not getattr(self, stamp):
                 setattr(self, stamp, now)
-        # Een latere stap betekent dat de eerdere ook gebeurd is.
-        if self.local_charges in ("ontvangen", "betaald") and not self.invoice_requested_at:
-            self.invoice_requested_at = self.invoice_received_at or now
-        if self.local_charges == "betaald" and not self.invoice_received_at:
-            self.invoice_received_at = self.local_charges_paid_at
         super().save(*args, **kwargs)
 
     @property
@@ -189,8 +179,8 @@ class SeaShipment(TimeStampedModel):
         blockers = []
         if self.carrier_release != "vrij":
             blockers.append("release")
-        if self.local_charges not in ("betaald", "geen"):
-            blockers.append("kosten")
+        if self.local_charges != "ontvangen":
+            blockers.append("factuur")
         if self.customs_status == "open":
             blockers.append("douane")
         if self.inspection_required and self.inspection_status != "vrijgegeven":
@@ -278,11 +268,9 @@ class SeaShipment(TimeStampedModel):
         elif self.lab_status == "afgekeurd":
             flags.append(("danger", "Labuitslag afgekeurd"))
         if soon and self.carrier_release != "vrij":
-            flags.append(("warning", "Release / DO regelen"))
-        if self.local_charges == "ontvangen":
-            flags.append(("warning", "Lokale kosten betalen"))
-        elif self.local_charges == "onbekend" and soon:
-            flags.append(("info", "Factuur rederij opvragen"))
+            flags.append(("warning", "Release opvragen" if self.carrier_release == "open" else "Release nog niet vrijgesteld"))
+        if self.local_charges == "onbekend" and soon:
+            flags.append(("info", "Factuur opvragen"))
         if not self.active_road_transports and (self.ata or (days is not None and days <= 5)):
             flags.append(("warning", "Transport plannen"))
         if self.eta_delay_hours >= 24:

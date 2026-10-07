@@ -13,8 +13,7 @@ SEA_DETAIL_FIELDS = [
     "booking_number", "shipping_line", "vessel_name", "voyage", "port_of_loading", "port_of_discharge", "terminal",
     "departed_at", "eta", "ata", "discharged_at", "free_time_until", "inspection_required", "inspection_point", "ched_number",
     "inspection_status", "inspection_planned_at", "customs_status", "carrier_release", "carrier_released_at",
-    "release_reference", "local_charges", "local_charges_amount", "invoice_requested_at", "invoice_received_at",
-    "local_charges_paid_at", "lab_status", "lab_sampled_at", "lab_expected_at", "lab_result_at", "lab_notes",
+    "release_reference", "local_charges", "invoice_requested_at", "invoice_received_at", "lab_status", "lab_sampled_at", "lab_expected_at", "lab_result_at", "lab_notes",
     "goods_description", "temperature_setpoint", "gross_weight_kg", "packages", "package_type", "notes",
 ]
 EDITABLE = {

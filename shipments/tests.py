@@ -786,22 +786,27 @@ class InlineEditAndReleaseTests(TestCase):
         self.assertEqual(timezone.localtime(self.sea.eta).strftime("%d-%m %H:%M"), "09-10 07:30")
 
     def test_pickup_blockers_and_attention(self):
-        self.assertEqual(self.sea.pickup_blockers, ["release", "kosten", "douane"])
+        self.assertEqual(self.sea.pickup_blockers, ["release", "factuur", "douane"])
         texts = [t for _l, t in self.sea.attention]
-        self.assertIn("Release / DO regelen", texts)
-        self.assertIn("Factuur rederij opvragen", texts)
-        self.edit("local_charges", "ontvangen")
+        self.assertIn("Release opvragen", texts)
+        self.assertIn("Factuur opvragen", texts)
+        self.edit("local_charges", "opgevraagd")
         self.sea.refresh_from_db()
-        self.assertIn("Lokale kosten betalen", [t for _l, t in self.sea.attention])
-        self.assertIsNotNone(self.sea.invoice_requested_at)  # ontvangen = ook opgevraagd
-        for field, value in [("carrier_release", "vrij"), ("local_charges", "betaald"), ("customs_status", "t1")]:
+        self.assertIsNotNone(self.sea.invoice_requested_at)
+        for field, value in [("carrier_release", "vrij"), ("local_charges", "ontvangen"), ("customs_status", "t1")]:
             self.edit(field, value)
         self.sea.refresh_from_db()
         self.assertEqual(self.sea.pickup_blockers, [])
-        self.assertIsNotNone(self.sea.invoice_requested_at)
-        self.assertIsNotNone(self.sea.local_charges_paid_at)
+        self.assertIsNotNone(self.sea.invoice_received_at)
+        self.assertIsNotNone(self.sea.carrier_released_at)
         page = self.client.get(f"/zendingen/zeevracht/{self.sea.pk}/")
         self.assertContains(page, "klaar om uit te halen")
+        self.assertContains(page, "Vrijgesteld")
+
+    def test_defaults_are_not_received(self):
+        self.assertEqual(self.sea.get_carrier_release_display(), "Nog niet ontvangen")
+        self.assertEqual(self.sea.get_local_charges_display(), "Nog niet ontvangen")
+        self.assertEqual(self.edit("local_charges", "betaald").status_code, 400)
 
     def test_list_marks_editable_cells(self):
         page = self.client.get("/zendingen/zeevracht/")

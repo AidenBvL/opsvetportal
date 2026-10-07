@@ -39,16 +39,11 @@
     <dt>Keuring gepland</dt><dd{% edit_attrs object "inspection_planned_at" %}>{{ object.inspection_planned_at|date:"D d-m-Y H:i"|default:"–" }}</dd>
     <dt>Douane</dt><dd{% edit_attrs object "customs_status" %}>{% if object.customs_status == "ingeklaard" %}<span class="chip chip-success">Ingeklaard</span>{% elif object.customs_status == "t1" %}<span class="chip chip-info">T1</span>{% else %}Nog niet ingeklaard{% endif %}</dd>
   </dl></div>
-  <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Release & kosten</h6><dl class="kv kv-edit">
+  <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Release & factuur</h6><dl class="kv kv-edit">
     <dt>Uithalen</dt><dd>{% with blockers=object.pickup_blockers %}{% if not blockers %}<span class="chip chip-success"><i class="bi bi-check2-circle"></i> klaar om uit te halen</span>{% else %}<span class="text-body-secondary">nog regelen:</span> {% for b in blockers %}<span class="chip chip-secondary">{{ b }}</span> {% endfor %}{% endif %}{% endwith %}</dd>
-    <dt>Release / DO</dt><dd{% edit_attrs object "carrier_release" %}>{{ object.get_carrier_release_display }}</dd>
-    <dt>Release ontvangen</dt><dd{% edit_attrs object "carrier_released_at" %}>{{ object.carrier_released_at|date:"D d-m-Y H:i"|default:"–" }}</dd>
-    <dt>Ref. release / DO</dt><dd class="font-monospace"{% edit_attrs object "release_reference" %}>{{ object.release_reference|default:"–" }}</dd>
-    <dt>Lokale kosten</dt><dd{% edit_attrs object "local_charges" %}>{{ object.get_local_charges_display }}</dd>
-    <dt>Bedrag</dt><dd{% edit_attrs object "local_charges_amount" %}>{{ object.local_charges_amount|euro|default:"–" }}</dd>
-    <dt>Factuur opgevraagd</dt><dd{% edit_attrs object "invoice_requested_at" %}>{{ object.invoice_requested_at|date:"d-m-Y H:i"|default:"–" }}</dd>
-    <dt>Factuur ontvangen</dt><dd{% edit_attrs object "invoice_received_at" %}>{{ object.invoice_received_at|date:"d-m-Y H:i"|default:"–" }}</dd>
-    <dt>Betaald</dt><dd{% edit_attrs object "local_charges_paid_at" %}>{{ object.local_charges_paid_at|date:"d-m-Y H:i"|default:"–" }}</dd>
+    <dt>Release</dt><dd{% edit_attrs object "carrier_release" %}>{% include "shipments/_release_chip.html" with value=object.carrier_release label=object.get_carrier_release_display %}{% if object.carrier_released_at %} <span class="small text-body-secondary">{{ object.carrier_released_at|date:"d-m-Y H:i" }}</span>{% endif %}</dd>
+    <dt>Ref. release</dt><dd class="font-monospace"{% edit_attrs object "release_reference" %}>{{ object.release_reference|default:"–" }}</dd>
+    <dt>Factuur</dt><dd{% edit_attrs object "local_charges" %}>{% include "shipments/_release_chip.html" with value=object.local_charges label=object.get_local_charges_display %}{% if object.invoice_received_at %} <span class="small text-body-secondary">{{ object.invoice_received_at|date:"d-m-Y" }}</span>{% elif object.invoice_requested_at %} <span class="small text-body-secondary">opgevraagd {{ object.invoice_requested_at|date:"d-m-Y" }}</span>{% endif %}</dd>
   </dl></div>
   <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Labonderzoek</h6><dl class="kv kv-edit">
     <dt>Status</dt><dd{% edit_attrs object "lab_status" %}>{{ object.get_lab_status_display }}</dd>
