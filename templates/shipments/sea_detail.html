@@ -113,6 +113,13 @@
             <dt>Douane vrij</dt><dd>{{ object.customs_cleared|yesno:"ja,nee" }}</dd>
             <dt>Labonderzoek</dt><dd>{{ object.get_lab_status_display }}{% if object.lab_status != "geen" %}<div class="small text-body-secondary">{% if object.lab_sampled_at %}monster {{ object.lab_sampled_at|date:"j M H:i" }}{% endif %}{% if object.lab_status == "monster" and object.lab_expected_at %} · uitslag verwacht {{ object.lab_expected_at|date:"D j M" }}{% endif %}{% if object.lab_result_at %} · uitslag {{ object.lab_result_at|date:"j M H:i" }}{% endif %}{% if object.lab_notes %}<br>{{ object.lab_notes }}{% endif %}</div>{% endif %}</dd>
           </dl></div>
+          <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Vrijgave & kosten</h6><dl class="kv">
+            <dt>Uithalen</dt><dd>{% with blockers=object.pickup_blockers %}{% if not blockers %}<span class="chip chip-success"><i class="bi bi-check2-circle"></i> klaar om uit te halen</span>{% else %}<span class="text-body-secondary">nog regelen:</span> {% for b in blockers %}<span class="chip chip-secondary">{{ b }}</span> {% endfor %}{% endif %}{% endwith %}</dd>
+            <dt>Rederij</dt><dd>{{ object.get_carrier_release_display }}{% if object.carrier_released_at %} <span class="small text-body-secondary">({{ object.carrier_released_at|date:"j M H:i" }})</span>{% endif %}</dd>
+            <dt>Pincode / release</dt><dd class="font-monospace">{{ object.release_reference|default:"–" }}{% if object.release_reference %} <button class="btn btn-icon btn-sm" data-copy="{{ object.release_reference }}" title="Kopiëren"><i class="bi bi-copy"></i></button>{% endif %}</dd>
+            <dt>Lokale kosten</dt><dd>{{ object.get_local_charges_display }}{% if object.local_charges_amount %} · {{ object.local_charges_amount|euro }}{% endif %}{% if object.local_charges_paid_at %} <span class="small text-body-secondary">(betaald {{ object.local_charges_paid_at|date:"j M" }})</span>{% endif %}</dd>
+            <dt>Invoice rederij</dt><dd>{{ object.get_invoice_status_display }}{% if object.invoice_received_at %} <span class="small text-body-secondary">({{ object.invoice_received_at|date:"j M" }})</span>{% elif object.invoice_requested_at %} <span class="small text-body-secondary">(opgevraagd {{ object.invoice_requested_at|date:"j M" }})</span>{% endif %}</dd>
+          </dl></div>
           {% if object.notes %}<div class="col-12"><h6 class="text-body-secondary small text-uppercase">Opmerkingen</h6><div style="white-space:pre-wrap">{{ object.notes }}</div></div>{% endif %}
         </div>
       </div>
@@ -159,6 +166,12 @@
           <select id="q-insp" name="inspection_status" class="form-select form-select-sm" data-plain onchange="this.form.submit()">{% for k, v in inspection_choices %}<option value="{{ k }}"{% if k == object.inspection_status %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
         </form>
         {% endif %}
+        {% for name, label, choices, current in quick_selects %}
+        <form method="post" action="{% url 'shipments:sea_quick' object.pk %}" class="d-flex gap-2 align-items-center">{% csrf_token %}
+          <label class="small text-body-secondary" style="width:90px" for="q-{{ name }}">{{ label }}</label>
+          <select id="q-{{ name }}" name="{{ name }}" class="form-select form-select-sm" data-plain onchange="this.form.submit()">{% for k, v in choices %}<option value="{{ k }}"{% if k == current %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+        </form>
+        {% endfor %}
         <form method="post" action="{% url 'shipments:sea_quick' object.pk %}" class="d-flex gap-2 align-items-center">{% csrf_token %}
           <label class="small text-body-secondary" style="width:90px" for="q-lab">Lab</label>
           <select id="q-lab" name="lab_status" class="form-select form-select-sm" data-plain onchange="this.form.submit()">{% for k, v in lab_choices %}<option value="{{ k }}"{% if k == object.lab_status %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>

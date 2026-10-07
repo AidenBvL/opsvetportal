@@ -83,6 +83,29 @@ class SeaShipment(TimeStampedModel):
     inspection_status = models.CharField("keuringsstatus", max_length=20, choices=INSPECTION_STATUS_CHOICES, default="aan_te_melden")
     inspection_planned_at = models.DateTimeField("keuring gepland op", null=True, blank=True)
     customs_cleared = models.BooleanField("douane vrij", default=False)
+    # Vrijgave bij de rederij en lokale kosten: pas als dit rond is kan de container worden uitgehaald.
+    carrier_release = models.CharField("vrijgave rederij", max_length=20, choices=[
+        ("open", "Nog niet vrijgegeven"),
+        ("aangevraagd", "Vrijgave aangevraagd"),
+        ("vrij", "Vrijgegeven"),
+    ], default="open")
+    carrier_released_at = models.DateTimeField("vrijgegeven op", null=True, blank=True)
+    release_reference = models.CharField("pincode / releasenummer", max_length=60, blank=True)
+    local_charges = models.CharField("lokale kosten", max_length=20, choices=[
+        ("onbekend", "Nog onbekend"),
+        ("te_betalen", "Nog te betalen"),
+        ("betaald", "Betaald"),
+        ("geen", "Geen lokale kosten"),
+    ], default="onbekend")
+    local_charges_amount = models.DecimalField("bedrag lokale kosten (€)", max_digits=10, decimal_places=2, null=True, blank=True)
+    local_charges_paid_at = models.DateTimeField("lokale kosten betaald op", null=True, blank=True)
+    invoice_status = models.CharField("invoice rederij", max_length=20, choices=[
+        ("niet", "Nog niet opgevraagd"),
+        ("opgevraagd", "Opgevraagd"),
+        ("ontvangen", "Ontvangen"),
+    ], default="niet")
+    invoice_requested_at = models.DateTimeField("invoice opgevraagd op", null=True, blank=True)
+    invoice_received_at = models.DateTimeField("invoice ontvangen op", null=True, blank=True)
     lab_status = models.CharField("labonderzoek", max_length=20, choices=[
         ("geen", "Geen labonderzoek"),
         ("monster", "Monster genomen, wacht op uitslag"),
@@ -137,13 +160,36 @@ class SeaShipment(TimeStampedModel):
             self.inspection_status = "n.v.t."
         if self.lab_status == "monster" and not self.lab_sampled_at:
             self.lab_sampled_at = timezone.now()
-        if self.lab_status in ("goed", "afgekeurd") and not self.lab_result_at:
-            self.lab_result_at = timezone.now()
+        # Datums bij statuswijzigingen automatisch invullen (alleen als ze nog leeg zijn).
+        now = timezone.now()
+        stamps = [("lab_status", "monster", "lab_sampled_at"), ("lab_status", "goed", "lab_result_at"),
+                  ("lab_status", "afgekeurd", "lab_result_at"), ("carrier_release", "vrij", "carrier_released_at"),
+                  ("local_charges", "betaald", "local_charges_paid_at"), ("invoice_status", "opgevraagd", "invoice_requested_at"),
+                  ("invoice_status", "ontvangen", "invoice_received_at")]
+        for field, value, stamp in stamps:
+            if getattr(self, field) == value and not getattr(self, stamp):
+                setattr(self, stamp, now)
+        if self.invoice_status == "ontvangen" and not self.invoice_requested_at:
+            self.invoice_requested_at = self.invoice_received_at
         super().save(*args, **kwargs)
 
     @property
     def is_open(self):
         return self.status in self.OPEN_STATUSES
+
+    @property
+    def pickup_blockers(self):
+        """Wat nog geregeld moet worden voordat de container bij de terminal kan worden uitgehaald."""
+        blockers = []
+        if self.carrier_release != "vrij":
+            blockers.append("rederij")
+        if self.local_charges in ("onbekend", "te_betalen"):
+            blockers.append("kosten" if self.local_charges == "te_betalen" else "kosten ?")
+        if not self.customs_cleared:
+            blockers.append("douane")
+        if self.inspection_required and self.inspection_status != "vrijgegeven":
+            blockers.append("keuring")
+        return blockers
 
     @property
     def road_route(self):
@@ -225,6 +271,12 @@ class SeaShipment(TimeStampedModel):
             flags.append(("danger" if late else "warning", "Labuitslag te laat" if late else "Wacht op labuitslag"))
         elif self.lab_status == "afgekeurd":
             flags.append(("danger", "Labuitslag afgekeurd"))
+        if soon and self.carrier_release != "vrij":
+            flags.append(("warning", "Vrijgave rederij regelen"))
+        if self.local_charges == "te_betalen":
+            flags.append(("warning", "Lokale kosten betalen"))
+        if self.ata and self.invoice_status == "niet":
+            flags.append(("info", "Invoice opvragen"))
         if not self.active_road_transports and (self.ata or (days is not None and days <= 5)):
             flags.append(("warning", "Transport plannen"))
         if self.eta_delay_hours >= 24:

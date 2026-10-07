@@ -44,6 +44,20 @@ def sea_view_filter(qs, view):
     }.get(view, open_qs)
 
 
+def with_list_data(qs):
+    """Alles wat de zeevrachtlijst per rij nodig heeft in één keer ophalen (transport, tussenstops, aantallen)."""
+    from django.db.models import Count, Prefetch
+
+    from actions.models import Action
+
+    road = (RoadTransport.objects.select_related("carrier", "loading_address", "unloading_address")
+            .prefetch_related(Prefetch("stops", queryset=TransportStop.objects.select_related("inspection_point", "address"))))
+    return (qs.select_related("customer", "shipping_line", "inspection_point", "handler")
+            .prefetch_related(Prefetch("road_transports", queryset=road))
+            .annotate(document_count=Count("documents", distinct=True),
+                      open_action_count=Count("actions", filter=Q(actions__status__in=Action.OPEN_STATUSES), distinct=True)))
+
+
 class SeaListView(CrudListView):
     model = SeaShipment
     namespace = "shipments"
@@ -54,18 +68,7 @@ class SeaListView(CrudListView):
     paginate_by = 100
 
     def get_queryset(self):
-        from django.db.models import Count, Prefetch
-
-        from actions.models import Action
-
-        road = (RoadTransport.objects.select_related("carrier", "loading_address", "unloading_address")
-                .prefetch_related(Prefetch("stops", queryset=TransportStop.objects.select_related("inspection_point", "address"))))
-        qs = (super().get_queryset()
-              .select_related("customer", "shipping_line", "inspection_point", "handler")
-              .prefetch_related(Prefetch("road_transports", queryset=road))
-              .annotate(document_count=Count("documents", distinct=True),
-                        open_action_count=Count("actions", filter=Q(actions__status__in=Action.OPEN_STATUSES), distinct=True)))
-        return sea_view_filter(qs, self.request.GET.get("weergave", "open")).order_by("eta")
+        return sea_view_filter(with_list_data(super().get_queryset()), self.request.GET.get("weergave", "open")).order_by("eta")
 
     def get_context_data(self, **kwargs):
         import json
@@ -86,6 +89,10 @@ class SeaListView(CrudListView):
         context["visible_keys"] = visible
         context["presets_json"] = json.dumps({key: {"label": label, "columns": cols} for key, (label, cols) in PRESETS.items()})
         context["presets"] = [(key, label) for key, (label, _cols) in PRESETS.items()]
+        if self.request.user.has_perm("shipments.change_seashipment"):
+            from .inline import field_specs
+
+            context["inline_specs_json"] = json.dumps(field_specs()).replace("</", "<\\/")
         return context
 
     def render_to_response(self, context, **kwargs):
@@ -120,6 +127,27 @@ def _road_csv(transports, fmt):
         return ["", "", "", "", "", ""]
     r = transports[0]
     return [fmt(r.loading_at), r.loading_place, fmt(r.delivery_planned_at), r.unloading_place, r.carrier or "", r.get_status_display()]
+
+
+@require_POST
+@permission_required("shipments.change_seashipment", raise_exception=True)
+def inline_update(request, pk):
+    """Eén veld direct vanuit de lijst aanpassen; geeft de vernieuwde rij terug."""
+    from django.http import JsonResponse
+    from django.template.loader import render_to_string
+
+    from .columns import user_columns
+    from .inline import apply_edit
+
+    shipment = get_object_or_404(SeaShipment, pk=pk)
+    ok, error = apply_edit(shipment, request.POST.get("field", ""), request.POST.get("value", ""))
+    if not ok:
+        return JsonResponse({"ok": False, "error": error}, status=400)
+    # Opnieuw ophalen met dezelfde gegevens als de lijst (transport, aantallen), zodat ook 'Aandacht' klopt.
+    shipment = with_list_data(SeaShipment.objects.filter(pk=pk)).get()
+    columns, _compact = user_columns(request.user)
+    html = render_to_string("shipments/_sea_row.html", {"s": shipment, "columns": columns}, request=request)
+    return JsonResponse({"ok": True, "html": html})
 
 
 @require_POST
@@ -165,6 +193,10 @@ class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
             "work_count": s.actions.count() + s.extra_costs.count(),
             "inspection_choices": INSPECTION_STATUS_CHOICES,
             "lab_choices": SeaShipment._meta.get_field("lab_status").choices,
+            "quick_selects": [
+                (name, label, SeaShipment._meta.get_field(name).choices, getattr(s, name))
+                for name, label in (("carrier_release", "Rederij"), ("local_charges", "Lokale kosten"), ("invoice_status", "Invoice"))
+            ],
         })
         return context
 
@@ -464,10 +496,11 @@ def quick_update(request, pk):
     if "customs_cleared" in request.POST:
         shipment.customs_cleared = request.POST["customs_cleared"] == "1"
         changed.append("douane")
-    lab_choices = dict(SeaShipment._meta.get_field("lab_status").choices)
-    if request.POST.get("lab_status") in lab_choices:
-        shipment.lab_status = request.POST["lab_status"]
-        changed.append("labonderzoek")
+    for name in ("lab_status", "carrier_release", "local_charges", "invoice_status"):
+        field = SeaShipment._meta.get_field(name)
+        if request.POST.get(name) in dict(field.choices):
+            setattr(shipment, name, request.POST[name])
+            changed.append(str(field.verbose_name))
     if changed:
         shipment.save()
         messages.success(request, f"{shipment.container_number}: {', '.join(changed)} bijgewerkt.")

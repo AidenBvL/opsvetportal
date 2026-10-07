@@ -32,6 +32,7 @@
     {% endfor %}
     <button class="btn btn-sm btn-outline-secondary">Filter</button>
     <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#columnsModal"><i class="bi bi-layout-three-columns"></i> Kolommen</button>
+    {% if perms.shipments.change_seashipment %}<span class="small text-body-secondary d-none d-lg-inline" title="Klik op een cel met een potloodje om de waarde direct aan te passen"><i class="bi bi-pencil"></i> klik op een cel om aan te passen</span>{% endif %}
     <span class="ms-auto small text-body-secondary">{{ paginator.count }} container{{ paginator.count|pluralize:"s" }}</span>
   </form>
   <div class="table-responsive">
@@ -41,7 +42,7 @@
     </tr></thead>
     <tbody>
     {% for s in object_list %}
-    <tr data-href="{% url 'shipments:sea_detail' s.pk %}">{% for col in columns %}{% include "shipments/_sea_cell.html" %}{% endfor %}</tr>
+    {% include "shipments/_sea_row.html" %}
     {% empty %}
     <tr><td colspan="{{ columns|length }}"><div class="empty-state"><i class="bi bi-water"></i>Geen containers in deze weergave.{% if perms.shipments.add_seashipment %}<div class="mt-2"><a class="btn btn-sm btn-primary" href="{% url 'shipments:seashipment_create' %}">Container toevoegen</a> <a class="btn btn-sm btn-outline-secondary" href="{% url 'documents:document_create' %}">Uit document</a></div>{% endif %}</div></td></tr>
     {% endfor %}
@@ -51,4 +52,6 @@
 </div>
 {% include "core/_pagination.html" %}
 {% include "shipments/_columns_modal.html" %}
+{% if perms.shipments.change_seashipment %}<div data-inline-edit data-url-template="{% url 'shipments:sea_inline' 0 %}" hidden>{% csrf_token %}</div>
+<script type="application/json" id="inline-specs">{{ inline_specs_json|safe }}</script>{% endif %}
 {% endblock %}

@@ -364,3 +364,17 @@ th[data-sort].desc::after { content: "\2193"; opacity: .9; }
 .route-mini-step { white-space: nowrap; color: var(--bs-secondary-color); }
 .route-mini-step.is-klaar { color: var(--bs-success-text-emphasis); }
 .route-mini-step.is-hier { color: var(--brand); font-weight: 600; }
+
+/* Direct bewerken in de lijst */
+td[data-edit] { position: relative; cursor: pointer; }
+td[data-edit]:hover, td[data-edit]:focus-visible { background: var(--brand-soft); outline: none; }
+td[data-edit]:hover::after, td[data-edit]:focus-visible::after { content: "\F4CB"; font-family: "bootstrap-icons"; position: absolute; top: 4px; right: 4px; font-size: .7rem; color: var(--brand); }
+td.is-editing { background: var(--app-surface) !important; }
+td.is-editing::after { display: none; }
+td.is-editing > :not(.inline-editor) { visibility: hidden; }
+.inline-editor { position: absolute; inset: 4px; z-index: 5; min-width: 170px; }
+.inline-editor .inline-hint { font-size: .68rem; color: var(--bs-secondary-color); background: var(--app-surface); padding: 1px 2px; white-space: nowrap; }
+td.is-saving { opacity: .5; }
+td.is-error { box-shadow: inset 0 0 0 2px var(--bs-danger); }
+tr.row-saved > td { animation: row-saved 1.6s ease-out; }
+@keyframes row-saved { from { background: var(--bs-success-bg-subtle); } to { background: transparent; } }
