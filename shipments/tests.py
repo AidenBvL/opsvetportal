@@ -574,7 +574,7 @@ class RoadAddressTests(TestCase):
         self.assertEqual(transport.driver_instructions, "Melden bij portier, dock 3.")
         page = self.client.get(f"/zendingen/weg/{transport.pk}/")
         self.assertContains(page, "ma-vr 06:00-14:00")
-        self.assertContains(page, "vooraf aanmelden verplicht")
+        self.assertContains(page, "tijdslot verplicht")
         self.assertContains(page, "PO-123")
         self.assertContains(page, "google.com/maps")
 
@@ -658,3 +658,82 @@ class SeaColumnsTests(TestCase):
     def test_unsafe_next_is_ignored(self):
         r = self.client.post("/zendingen/zeevracht/kolommen/", {"columns": ["status"], "next": "https://evil.example/"})
         self.assertRedirects(r, "/zendingen/zeevracht/", fetch_redirect_response=False)
+
+
+class StopsAndLabTests(TestCase):
+    def setUp(self):
+        from core.models import Address, InspectionPoint
+
+        self.client.force_login(User.objects.create_superuser("admin", "a@example.com", "pw"))
+        self.customer = Customer.objects.create(name="J.A. Ter Maten")
+        self.point = InspectionPoint.objects.create(name="GCP Maasvlakte", opening_hours="ma-vr 07-22")
+        self.rhenus = Address.objects.create(name="Rhenus Deepsea Terminal", kind="tussen", city="Maasvlakte Rotterdam",
+                                             instructions="Container blijft op plug tot labuitslag.")
+        self.home = Address.objects.create(name="Ter Maten Bunschoten", customer=self.customer, is_default=True, city="Bunschoten")
+        self.sea = SeaShipment.objects.create(customer=self.customer, container_number="SEGU9074220", inspection_required=True,
+                                              inspection_point=self.point, lab_status="monster",
+                                              lab_expected_at=timezone.localdate() + timedelta(days=2))
+
+    def base_post(self, **extra):
+        data = {"customer": self.customer.pk, "direction": "import", "transport_type": "container", "status": "gepland",
+                "inspection_status": "aan_te_melden", "sea_shipment": self.sea.pk, "unloading_address": self.home.pk,
+                "stops-TOTAL_FORMS": "0", "stops-INITIAL_FORMS": "0", "stops-MIN_NUM_FORMS": "0", "stops-MAX_NUM_FORMS": "1000"}
+        data.update(extra)
+        return data
+
+    def test_plan_from_sea_suggests_inspection_and_lab_stop(self):
+        stops = self.client.get(f"/zendingen/weg/nieuw/?sea_shipment={self.sea.pk}").context["stops"]
+        self.assertEqual([f.initial.get("kind") for f in stops.forms], ["keurpunt", "lab"])
+        self.assertEqual(stops.forms[0].initial["inspection_point"], self.point.pk)
+
+    def test_create_with_stops_in_chosen_order_and_walk_the_route(self):
+        from .models import RoadTransport
+
+        r = self.client.post("/zendingen/weg/nieuw/", self.base_post(**{
+            "stops-TOTAL_FORMS": "3",
+            # Op het scherm omgedraaid: lab-opslag (positie 2) na het keurpunt (positie 1); de derde is verwijderd.
+            "stops-0-kind": "lab", "stops-0-address": self.rhenus.pk, "stops-0-position": "2",
+            "stops-1-kind": "keurpunt", "stops-1-inspection_point": self.point.pk, "stops-1-position": "1",
+            "stops-2-kind": "overig", "stops-2-place": "weg", "stops-2-position": "3", "stops-2-DELETE": "on",
+        }))
+        self.assertEqual(r.status_code, 302, getattr(r, "context", None) and (r.context["form"].errors, r.context["stops"].errors))
+        transport = RoadTransport.objects.get()
+        self.assertEqual([s.kind for s in transport.stops.all()], ["keurpunt", "lab"])
+        self.assertEqual([s.position for s in transport.stops.all()], [1, 2])
+
+        page = self.client.get(f"/zendingen/weg/{transport.pk}/")
+        self.assertContains(page, "Tussenstop 2: Opslag: wachten op labuitslag")
+        self.assertContains(page, "Monster genomen, wacht op uitslag")
+        self.assertContains(page, "Container blijft op plug tot labuitslag.")
+
+        keurpunt, lab = transport.stops.all()
+        url = f"/zendingen/weg/{transport.pk}/stap/"
+        self.client.post(url + "geladen/")
+        self.client.post(url + "aankomst/", {"stop": keurpunt.pk})
+        transport.refresh_from_db()
+        self.assertEqual(transport.status, "keurpunt")
+        self.client.post(url + "vertrek/", {"stop": keurpunt.pk})
+        self.client.post(url + "aankomst/", {"stop": lab.pk})
+        transport.refresh_from_db()
+        self.assertEqual(transport.status, "tussenstop")
+        self.sea.refresh_from_db()
+        self.assertEqual([state for state, _k, _n in self.sea.road_route], ["klaar", "klaar", "hier", "gepland"])
+        self.client.post(url + "geleverd/")
+        transport.refresh_from_db()
+        self.assertEqual(transport.status, "geleverd")
+        self.assertIsNotNone(transport.delivered_at)
+
+    def test_stop_needs_a_location(self):
+        r = self.client.post("/zendingen/weg/nieuw/", self.base_post(**{"stops-TOTAL_FORMS": "1", "stops-0-kind": "lab"}))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Kies een keurpunt of adres, of typ een plaats.")
+
+    def test_lab_status_attention_and_quick_update(self):
+        self.assertIn(("warning", "Wacht op labuitslag"), self.sea.attention)
+        self.sea.lab_expected_at = timezone.localdate() - timedelta(days=1)
+        self.assertIn(("danger", "Labuitslag te laat"), self.sea.attention)
+        self.client.post(f"/zendingen/zeevracht/{self.sea.pk}/snel/", {"lab_status": "goed"})
+        self.sea.refresh_from_db()
+        self.assertEqual(self.sea.lab_status, "goed")
+        self.assertIsNotNone(self.sea.lab_result_at)
+        self.assertNotIn("Wacht op labuitslag", [text for _l, text in self.sea.attention])

@@ -249,6 +249,53 @@
     });
   });
 
+  // Tussenstops in het transportformulier: toevoegen, verwijderen, volgorde, velden per soort.
+  $$("[data-stops]").forEach(box => {
+    const list = $("[data-stop-list]", box), tpl = $("template[data-stop-template]", box);
+    const total = $("input[name$='-TOTAL_FORMS']", box);
+    const visible = () => $$("[data-stop]", list).filter(el => !el.classList.contains("d-none"));
+    const renumber = () => visible().forEach((el, i) => {
+      $("[data-stop-number]", el).textContent = i + 1;
+      const pos = $("[data-stop-position]", el);
+      if (pos) pos.value = i + 1;
+    });
+    const applyKind = el => {
+      const kind = ($("[data-stop-kind]", el) || {}).value;
+      $$("[data-show-for]", el).forEach(x => x.classList.toggle("d-none", x.dataset.showFor !== kind));
+      $$("[data-hide-for]", el).forEach(x => x.classList.toggle("d-none", x.dataset.hideFor === kind));
+    };
+    $$("[data-stop]", list).forEach(applyKind);
+    renumber();
+    box.addEventListener("change", e => { const el = e.target.closest("[data-stop]"); if (el && e.target.matches("[data-stop-kind]")) applyKind(el); });
+    box.addEventListener("click", e => {
+      if (e.target.closest("[data-stop-add]")) {
+        const index = Number(total.value);
+        list.insertAdjacentHTML("beforeend", tpl.innerHTML.replace(/__prefix__/g, index));
+        total.value = index + 1;
+        const el = list.lastElementChild;
+        applyKind(el);
+        renumber();
+        ($("[data-stop-kind]", el) || el).focus();
+        return;
+      }
+      const el = e.target.closest("[data-stop]");
+      if (!el) return;
+      if (e.target.closest("[data-stop-remove]")) {
+        const del = $("input[name$='-DELETE']", el);
+        if (del) del.checked = true;
+        el.classList.add("d-none");
+        renumber();
+      }
+      const move = e.target.closest("[data-stop-move]");
+      if (move) {
+        const all = visible(), i = all.indexOf(el), j = i + Number(move.dataset.stopMove);
+        if (j < 0 || j >= all.length) return;
+        if (j < i) list.insertBefore(el, all[j]); else list.insertBefore(all[j], el);
+        renumber();
+      }
+    });
+  });
+
   // Formulier: waarschuwen bij weggaan met niet-opgeslagen wijzigingen.
   $$("form[data-dirty-warning]").forEach(form => {
     let dirty = false;

@@ -13,7 +13,7 @@ from core.crud import CrudCreateView, CrudListView, CrudUpdateView
 from documents.models import Document
 
 from .forms import BulkContainerForm, RoadTransportForm, SeaShipmentForm
-from .models import INSPECTION_STATUS_CHOICES, RoadTransport, SeaShipment
+from .models import INSPECTION_STATUS_CHOICES, RoadTransport, SeaShipment, TransportStop
 from .tracking.service import refresh_all, refresh_shipment
 
 
@@ -58,7 +58,8 @@ class SeaListView(CrudListView):
 
         from actions.models import Action
 
-        road = RoadTransport.objects.select_related("carrier", "loading_address", "unloading_address")
+        road = (RoadTransport.objects.select_related("carrier", "loading_address", "unloading_address")
+                .prefetch_related(Prefetch("stops", queryset=TransportStop.objects.select_related("inspection_point", "address"))))
         qs = (super().get_queryset()
               .select_related("customer", "shipping_line", "inspection_point", "handler")
               .prefetch_related(Prefetch("road_transports", queryset=road))
@@ -156,13 +157,14 @@ class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
             "vessel_history": s.tracking_updates.filter(vessel_changed=True),
             "actions": s.actions.all(),
             "costs": s.extra_costs.all(),
-            "road": s.road_transports.select_related("carrier"),
+            "road": s.road_transports.select_related("carrier").prefetch_related("stops__inspection_point", "stops__address"),
             "documents": s.documents.select_related("uploaded_by").defer("content", "extracted_text"),
             "doc_types": Document.TYPE_CHOICES,
             "meeting_items": s.meeting_items.select_related("meeting")[:10],
             "history": history_for(s),
             "work_count": s.actions.count() + s.extra_costs.count(),
             "inspection_choices": INSPECTION_STATUS_CHOICES,
+            "lab_choices": SeaShipment._meta.get_field("lab_status").choices,
         })
         return context
 
@@ -265,22 +267,95 @@ class RoadDetailView(PermissionRequiredMixin, generic.DetailView):
     def get_context_data(self, **kwargs):
         t = self.object
         documents = t.documents.select_related("uploaded_by").defer("content", "extracted_text")
-        stops = [
-            {"title": "Laden", "icon": "bi-box-arrow-up", "address": t.loading_address, "place": t.loading_place,
-             "reference": t.loading_reference, "when_label": "Gepland", "when": t.loading_at},
-            {"title": "Lossen", "icon": "bi-box-arrow-in-down", "address": t.unloading_address, "place": t.unloading_place,
-             "reference": t.unloading_reference, "when_label": "Levering gepland", "when": t.delivery_planned_at,
-             "until": t.delivery_window_until, "done": t.delivered_at},
-        ]
+        stops = list(t.stops.select_related("inspection_point", "address"))
+        delivered = bool(t.delivered_at) or t.status in ("geleverd", "afgerond")
+        started = t.status != "gepland" or delivered or any(st.arrived_at for st in stops)
+        route = [{"kind": "laden", "title": "Laden", "icon": "box-arrow-up", "address": t.loading_address, "place": t.loading_place,
+                  "reference": t.loading_reference, "planned": t.loading_at, "state": "klaar" if started else "gepland"}]
+        for number, st in enumerate(stops, start=1):
+            route.append({"kind": "stop", "stop": st, "title": f"Tussenstop {number}: {st.get_kind_display()}", "icon": st.icon,
+                          "address": st.address, "place": st.place, "location": st.location_name, "reference": st.reference,
+                          "planned": st.planned_arrival, "until": st.planned_departure, "state": "klaar" if delivered else st.state})
+        route.append({"kind": "lossen", "title": "Lossen", "icon": "box-arrow-in-down", "address": t.unloading_address,
+                      "place": t.unloading_place, "reference": t.unloading_reference, "planned": t.delivery_planned_at,
+                      "until": t.delivery_window_until, "done": t.delivered_at, "state": "klaar" if delivered else "gepland"})
+        # De eerstvolgende stap die nog niet klaar is, is waar de container nu naartoe gaat of staat.
+        current = next((step for step in route if step["state"] != "klaar"), None)
+        if current and current["state"] == "gepland" and started:
+            current["next"] = True
         return super().get_context_data(history=history_for(t), documents=documents, doc_types=Document.TYPE_CHOICES,
-                                        stops=stops, **kwargs)
+                                        route=route, **kwargs)
 
 
-class RoadCreateView(CrudCreateView):
+class RoadStopsMixin:
+    """Tussenstops (keurpunt, opslag voor labuitslag, ...) bewerken in hetzelfde formulier als het transport."""
+
+    def initial_stops(self):
+        return []
+
+    def get_stops(self):
+        from .forms import stops_formset
+
+        instance = self.object if getattr(self, "object", None) else RoadTransport()
+        if self.request.method == "POST":
+            if "stops-TOTAL_FORMS" not in self.request.POST:
+                # Formulier zonder tussenstop-blok: niets aan de tussenstops veranderen.
+                empty = {"stops-TOTAL_FORMS": "0", "stops-INITIAL_FORMS": "0"}
+                return stops_formset()(empty, instance=RoadTransport(), prefix="stops")
+            data = self.request.POST
+            return stops_formset()(data, instance=instance, prefix="stops")
+        initial = self.initial_stops() if not instance.pk else []
+        return stops_formset(extra=len(initial))(instance=instance, prefix="stops", initial=initial)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["stops"] = kwargs.get("stops") or self.get_stops()
+        context["section_after"] = "Laden"
+        context["section_after_template"] = "shipments/_stops_formset.html"
+        return context
+
+    def form_valid(self, form):
+        from django.db import transaction
+
+        stops = self.get_stops()
+        if not stops.is_valid():
+            return self.render_to_response(self.get_context_data(form=form, stops=stops))
+        with transaction.atomic():
+            response = super().form_valid(form)
+            stops.instance = self.object
+            saved = stops.save(commit=False)
+            for stop in stops.deleted_objects:
+                stop.delete()
+            # Volgorde zoals op het scherm (het formulier zet 'position'; anders de volgorde van invoer).
+            for stop in saved:
+                stop.transport = self.object
+                stop.save()
+            for position, stop in enumerate(self.object.stops.order_by("position", "pk"), start=1):
+                if stop.position != position:
+                    TransportStop.objects.filter(pk=stop.pk).update(position=position)
+        return response
+
+    def form_invalid(self, form):
+        return self.render_to_response(self.get_context_data(form=form, stops=self.get_stops()))
+
+
+class RoadCreateView(RoadStopsMixin, CrudCreateView):
     model = RoadTransport
     namespace = "shipments"
     form_class = RoadTransportForm
     detail_url_name = "shipments:road_detail"
+
+    def initial_stops(self):
+        sea = SeaShipment.objects.filter(pk=self.request.GET.get("sea_shipment") or 0).first()
+        if not sea:
+            return []
+        stops = []
+        if sea.inspection_required and sea.inspection_point_id:
+            stops.append({"kind": "keurpunt", "inspection_point": sea.inspection_point_id, "position": 1,
+                          "planned_arrival": sea.inspection_planned_at})
+        if sea.lab_status == "monster":
+            stops.append({"kind": "lab", "position": len(stops) + 1, "notes": "Wachten op labuitslag"})
+        return stops
 
     def get_initial(self):
         initial = super().get_initial()
@@ -310,11 +385,43 @@ class RoadCreateView(CrudCreateView):
         return initial
 
 
-class RoadUpdateView(CrudUpdateView):
+class RoadUpdateView(RoadStopsMixin, CrudUpdateView):
     model = RoadTransport
     namespace = "shipments"
     form_class = RoadTransportForm
     detail_url_name = "shipments:road_detail"
+
+
+@require_POST
+@permission_required("shipments.change_roadtransport", raise_exception=True)
+def road_step(request, pk, action):
+    """Vanaf de transportpagina vastleggen: geladen, aangekomen/vertrokken bij een tussenstop, geleverd."""
+    transport = get_object_or_404(RoadTransport, pk=pk)
+    now = timezone.now()
+    if action == "geladen":
+        transport.status = "onderweg"
+        message = "Geladen, onderweg."
+    elif action == "geleverd":
+        transport.delivered_at = transport.delivered_at or now
+        transport.status = "geleverd"
+        message = "Geleverd."
+    elif action in ("aankomst", "vertrek"):
+        stop = get_object_or_404(TransportStop, pk=request.POST.get("stop"), transport=transport)
+        if action == "aankomst":
+            stop.arrived_at = stop.arrived_at or now
+            transport.status = "keurpunt" if stop.kind == "keurpunt" else "tussenstop"
+            message = f"Aangekomen bij {stop.location_name}."
+        else:
+            stop.arrived_at = stop.arrived_at or now
+            stop.departed_at = stop.departed_at or now
+            transport.status = "onderweg"
+            message = f"Vertrokken bij {stop.location_name}."
+        stop.save()
+    else:
+        raise Http404
+    transport.save()
+    messages.success(request, message)
+    return redirect("shipments:road_detail", pk=pk)
 
 
 def search(request):
@@ -357,6 +464,10 @@ def quick_update(request, pk):
     if "customs_cleared" in request.POST:
         shipment.customs_cleared = request.POST["customs_cleared"] == "1"
         changed.append("douane")
+    lab_choices = dict(SeaShipment._meta.get_field("lab_status").choices)
+    if request.POST.get("lab_status") in lab_choices:
+        shipment.lab_status = request.POST["lab_status"]
+        changed.append("labonderzoek")
     if changed:
         shipment.save()
         messages.success(request, f"{shipment.container_number}: {', '.join(changed)} bijgewerkt.")

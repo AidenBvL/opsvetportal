@@ -1,0 +1,26 @@
+{% load portal %}<div class="stop-card{% if f.DELETE.value %} d-none{% endif %}" data-stop>
+  {% for hidden in f.hidden_fields %}{{ hidden }}{% endfor %}
+  <div class="d-none">{{ f.DELETE }}</div>
+  {% for e in f.non_field_errors %}<div class="text-danger small mb-1">{{ e }}</div>{% endfor %}
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <span class="stop-number" data-stop-number></span>
+    <div style="min-width:230px">{{ f.kind|bs }}</div>
+    <div class="ms-auto d-flex gap-1">
+      <button type="button" class="btn btn-icon btn-sm" data-stop-move="-1" title="Eerder in de route" aria-label="Eerder"><i class="bi bi-arrow-up"></i></button>
+      <button type="button" class="btn btn-icon btn-sm" data-stop-move="1" title="Later in de route" aria-label="Later"><i class="bi bi-arrow-down"></i></button>
+      <button type="button" class="btn btn-icon btn-sm text-danger" data-stop-remove title="Tussenstop verwijderen" aria-label="Verwijderen"><i class="bi bi-trash"></i></button>
+    </div>
+  </div>
+  <div class="row g-2">
+    <div class="col-md-4" data-show-for="keurpunt"><label class="form-label small fw-semibold mb-1">{{ f.inspection_point.label }}</label>{{ f.inspection_point|bs }}</div>
+    <div class="col-md-4" data-hide-for="keurpunt"><label class="form-label small fw-semibold mb-1">{{ f.address.label }}</label>{{ f.address|bs }}</div>
+    <div class="col-md-4"><label class="form-label small fw-semibold mb-1">{{ f.place.label }}</label>{{ f.place|bs }}</div>
+    <div class="col-md-4"><label class="form-label small fw-semibold mb-1">{{ f.reference.label }}</label>{{ f.reference|bs }}</div>
+    <div class="col-md-3 col-6"><label class="form-label small fw-semibold mb-1">{{ f.planned_arrival.label }}</label>{{ f.planned_arrival|bs }}</div>
+    <div class="col-md-3 col-6"><label class="form-label small fw-semibold mb-1">{{ f.planned_departure.label }}</label>{{ f.planned_departure|bs }}<div class="form-text">{{ f.planned_departure.help_text }}</div></div>
+    <div class="col-md-3 col-6"><label class="form-label small fw-semibold mb-1">{{ f.arrived_at.label }}</label>{{ f.arrived_at|bs }}</div>
+    <div class="col-md-3 col-6"><label class="form-label small fw-semibold mb-1">{{ f.departed_at.label }}</label>{{ f.departed_at|bs }}</div>
+    <div class="col-12"><label class="form-label small fw-semibold mb-1">{{ f.notes.label }}</label>{{ f.notes|bs }}</div>
+  </div>
+  {% for field in f.visible_fields %}{% for e in field.errors %}<div class="text-danger small">{{ field.label }}: {{ e }}</div>{% endfor %}{% endfor %}
+</div>
