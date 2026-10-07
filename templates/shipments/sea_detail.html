@@ -111,6 +111,7 @@
             <dt>CHED</dt><dd class="font-monospace">{{ object.ched_number|default:"–" }}</dd>
             <dt>Keuring gepland</dt><dd>{{ object.inspection_planned_at|date:"D j M H:i"|default:"–" }}</dd>
             <dt>Douane vrij</dt><dd>{{ object.customs_cleared|yesno:"ja,nee" }}</dd>
+            <dt>Labonderzoek</dt><dd>{{ object.get_lab_status_display }}{% if object.lab_status != "geen" %}<div class="small text-body-secondary">{% if object.lab_sampled_at %}monster {{ object.lab_sampled_at|date:"j M H:i" }}{% endif %}{% if object.lab_status == "monster" and object.lab_expected_at %} · uitslag verwacht {{ object.lab_expected_at|date:"D j M" }}{% endif %}{% if object.lab_result_at %} · uitslag {{ object.lab_result_at|date:"j M H:i" }}{% endif %}{% if object.lab_notes %}<br>{{ object.lab_notes }}{% endif %}</div>{% endif %}</dd>
           </dl></div>
           {% if object.notes %}<div class="col-12"><h6 class="text-body-secondary small text-uppercase">Opmerkingen</h6><div style="white-space:pre-wrap">{{ object.notes }}</div></div>{% endif %}
         </div>
@@ -159,6 +160,10 @@
         </form>
         {% endif %}
         <form method="post" action="{% url 'shipments:sea_quick' object.pk %}" class="d-flex gap-2 align-items-center">{% csrf_token %}
+          <label class="small text-body-secondary" style="width:90px" for="q-lab">Lab</label>
+          <select id="q-lab" name="lab_status" class="form-select form-select-sm" data-plain onchange="this.form.submit()">{% for k, v in lab_choices %}<option value="{{ k }}"{% if k == object.lab_status %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+        </form>
+        <form method="post" action="{% url 'shipments:sea_quick' object.pk %}" class="d-flex gap-2 align-items-center">{% csrf_token %}
           <span class="small text-body-secondary" style="width:90px">Douane</span>
           <input type="hidden" name="customs_cleared" value="{% if object.customs_cleared %}0{% else %}1{% endif %}">
           <button class="btn btn-sm {% if object.customs_cleared %}btn-success{% else %}btn-outline-secondary{% endif %} flex-grow-1">{% if object.customs_cleared %}<i class="bi bi-check2"></i> Douane vrij{% else %}Markeer douane vrij{% endif %}</button>
@@ -167,7 +172,8 @@
     {% endif %}
 
     <div class="card mb-3"><div class="card-header"><i class="bi bi-truck"></i> Wegtransport</div>
-      <div class="list-group list-group-flush">{% for r in road %}<a class="list-group-item list-group-item-action" href="{% url 'shipments:road_detail' r.pk %}"><div class="d-flex"><span>{{ r.carrier|default:"vervoerder ?" }}</span><span class="ms-auto">{% badge r.status r.get_status_display %}</span></div><div class="small text-body-secondary">{{ r.loading_at|date:"D j M H:i"|default:"laden ?" }} → {{ r.unloading_place|default:"?" }}</div></a>
+      <div class="list-group list-group-flush">{% for r in road %}<a class="list-group-item list-group-item-action" href="{% url 'shipments:road_detail' r.pk %}"><div class="d-flex"><span>{{ r.carrier|default:"vervoerder ?" }}</span><span class="ms-auto">{% badge r.status r.get_status_display %}</span></div><div class="small text-body-secondary">{{ r.loading_at|date:"D j M H:i"|default:"laden ?" }} → {{ r.unloading_address|default:r.unloading_place|default:"?" }}</div>
+        {% for stop in r.stops.all %}<div class="small"><i class="bi bi-{{ stop.icon }}"></i> {{ stop.get_kind_display }}: {{ stop.location_name }}{% if stop.state == "hier" %} <span class="chip chip-primary">staat hier</span>{% elif stop.state == "klaar" %} <i class="bi bi-check2 text-success"></i>{% endif %}</div>{% endfor %}</a>
       {% empty %}<div class="p-3 small text-body-secondary">Nog niet gepland.{% if perms.shipments.add_roadtransport %} <a href="{% url 'shipments:roadtransport_create' %}?sea_shipment={{ object.pk }}">Plan transport</a>{% endif %}</div>{% endfor %}</div></div>
 
     <div class="card mb-3"><div class="card-header"><i class="bi bi-building"></i> Klant</div>

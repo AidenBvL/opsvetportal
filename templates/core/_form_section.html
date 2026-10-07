@@ -1,0 +1,27 @@
+{% load portal %}<div class="{% if section.title %}form-section{% endif %}">
+  {% if section.title %}<div class="form-section-title"><i class="bi bi-{{ section.icon }}"></i> {{ section.title }}</div>{% endif %}
+  <div class="row g-3">
+  {% for field in section.fields %}
+    {% if field|is_checkbox %}
+      <div class="col-md-{{ cols|default:6 }} col-xl-{% if cols %}{{ cols }}{% else %}4{% endif %} d-flex align-items-end">
+        <div class="form-check form-switch">{{ field|bs }} <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}</div>
+      </div>
+    {% elif field|is_multi_checkbox %}
+      <div class="col-12">
+        <label class="form-label small fw-semibold mb-1 d-block">{{ field.label }}</label>
+        {% for choice in field %}<div class="form-check form-check-inline">{{ choice.tag }} <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label></div>{% endfor %}
+        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+    {% else %}
+      <div class="{% if field.widget_type == 'textarea' %}col-12{% else %}col-md-{{ cols|default:6 }}{% if not cols %} col-xl-4{% endif %}{% endif %}">
+        <label class="form-label small fw-semibold mb-1" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+        {{ field|bs }}
+        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        {% for e in field.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      </div>
+    {% endif %}
+  {% endfor %}
+  </div>
+</div>

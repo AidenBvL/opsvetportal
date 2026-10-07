@@ -309,7 +309,8 @@ class Terminal(TimeStampedModel):
 class Address(TimeStampedModel):
     """Laad- of losadres voor wegtransport, met de vaste afspraken (tijden, aanmelden, instructies)."""
 
-    KIND_CHOICES = [("los", "Losadres"), ("laad", "Laadadres"), ("beide", "Laad- en losadres")]
+    KIND_CHOICES = [("los", "Losadres"), ("laad", "Laadadres"), ("beide", "Laad- en losadres"),
+                    ("tussen", "Tussenstop (opslag, koelhuis, lab)")]
 
     name = models.CharField("naam", max_length=100, help_text="Korte naam om te kiezen, bijv. 'Ter Maten Bunschoten'.")
     customer = models.ForeignKey(

@@ -348,3 +348,19 @@ th[data-sort].desc::after { content: "\2193"; opacity: .9; }
 /* Formulier rond header/body/footer in een scrollbare modal: laat de body scrollen i.p.v. de pagina te laten overlopen. */
 .modal-dialog-scrollable .modal-content > form { display: flex; flex-direction: column; min-height: 0; max-height: 100%; overflow: hidden; }
 .modal-dialog-scrollable .modal-content > form > .modal-body { overflow-y: auto; min-height: 0; }
+
+/* Tussenstops */
+.stop-card { border: 1px solid var(--app-border); border-left: 3px solid var(--brand); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: var(--app-surface); }
+.stop-number { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-weight: 600; font-size: .85rem; flex: 0 0 auto; }
+.route-steps { list-style: none; margin: 0; padding: 0; position: relative; }
+.route-steps > li { position: relative; padding: 0 0 18px 44px; }
+.route-steps > li::before { content: ""; position: absolute; left: 15px; top: 32px; bottom: 0; width: 2px; background: var(--app-border); }
+.route-steps > li:last-child::before { display: none; }
+.route-steps .step-icon { position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--app-surface-2); color: var(--bs-secondary-color); border: 2px solid var(--app-border); }
+.route-steps > li.is-done .step-icon { background: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); border-color: var(--bs-success-border-subtle); }
+.route-steps > li.is-here .step-icon { background: var(--brand); color: #fff; border-color: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft); }
+.route-steps > li.is-done::before { background: var(--bs-success-border-subtle); }
+.route-mini { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; max-width: 360px; }
+.route-mini-step { white-space: nowrap; color: var(--bs-secondary-color); }
+.route-mini-step.is-klaar { color: var(--bs-success-text-emphasis); }
+.route-mini-step.is-hier { color: var(--brand); font-weight: 600; }

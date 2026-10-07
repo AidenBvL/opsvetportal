@@ -209,3 +209,14 @@ def form_sections(form):
     if rest:
         result.append({"title": "Overig", "icon": "three-dots", "fields": rest})
     return result
+
+
+@register.simple_tag
+def terminal_datalist(list_id):
+    """Eén datalist met alle terminals, voor tekstvelden met list="<list_id>"."""
+    from django.utils.html import format_html, format_html_join
+
+    from core.ports import port_index
+
+    options = format_html_join("", '<option value="{}">{}</option>', ((t["label"], t["locode"]) for t in port_index()["terminals"]))
+    return format_html('<datalist id="{}">{}</datalist>', list_id, options)

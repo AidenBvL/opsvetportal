@@ -83,6 +83,16 @@ class SeaShipment(TimeStampedModel):
     inspection_status = models.CharField("keuringsstatus", max_length=20, choices=INSPECTION_STATUS_CHOICES, default="aan_te_melden")
     inspection_planned_at = models.DateTimeField("keuring gepland op", null=True, blank=True)
     customs_cleared = models.BooleanField("douane vrij", default=False)
+    lab_status = models.CharField("labonderzoek", max_length=20, choices=[
+        ("geen", "Geen labonderzoek"),
+        ("monster", "Monster genomen, wacht op uitslag"),
+        ("goed", "Uitslag goed, vrijgegeven"),
+        ("afgekeurd", "Uitslag afgekeurd"),
+    ], default="geen")
+    lab_sampled_at = models.DateTimeField("monster genomen op", null=True, blank=True)
+    lab_expected_at = models.DateField("uitslag verwacht", null=True, blank=True)
+    lab_result_at = models.DateTimeField("uitslag ontvangen op", null=True, blank=True)
+    lab_notes = models.CharField("opmerking labonderzoek", max_length=250, blank=True, help_text="Bijv. laboratorium, onderzochte parameters.")
 
     goods_description = models.CharField("goederenomschrijving", max_length=250, blank=True)
     temperature_setpoint = models.DecimalField("temperatuur setpoint (°C)", max_digits=5, decimal_places=1, null=True, blank=True)
@@ -125,11 +135,29 @@ class SeaShipment(TimeStampedModel):
             self.eta_original = self.eta
         if not self.inspection_required:
             self.inspection_status = "n.v.t."
+        if self.lab_status == "monster" and not self.lab_sampled_at:
+            self.lab_sampled_at = timezone.now()
+        if self.lab_status in ("goed", "afgekeurd") and not self.lab_result_at:
+            self.lab_result_at = timezone.now()
         super().save(*args, **kwargs)
 
     @property
     def is_open(self):
         return self.status in self.OPEN_STATUSES
+
+    @property
+    def road_route(self):
+        """Korte route van het (eerste) wegtransport: ["Terminal", "Keurpunt X", "Rhenus", "Klant"] met status per stap."""
+        transports = self.active_road_transports
+        if not transports:
+            return []
+        t = transports[0]
+        steps = [("klaar" if t.status != "gepland" else "gepland", "Laden", t.loading_address.name if t.loading_address_id else (t.loading_place or "?"))]
+        for stop in t.stops.all():
+            steps.append((stop.state, stop.get_kind_display(), stop.location_name))
+        delivered = bool(t.delivered_at) or t.status in ("geleverd", "afgerond")
+        steps.append(("klaar" if delivered else "gepland", "Lossen", t.unloading_address.name if t.unloading_address_id else (t.unloading_place or "?")))
+        return steps
 
     @property
     def eta_delay_hours(self):
@@ -192,6 +220,11 @@ class SeaShipment(TimeStampedModel):
                 flags.append(("danger", f"Vrije dagen {-left} d verlopen"))
             elif left <= 2:
                 flags.append(("danger" if left == 0 else "warning", "Laatste vrije dag" if left == 0 else f"Nog {left} vrije dag{'en' if left > 1 else ''}"))
+        if self.lab_status == "monster":
+            late = self.lab_expected_at and self.lab_expected_at < timezone.localdate()
+            flags.append(("danger" if late else "warning", "Labuitslag te laat" if late else "Wacht op labuitslag"))
+        elif self.lab_status == "afgekeurd":
+            flags.append(("danger", "Labuitslag afgekeurd"))
         if not self.active_road_transports and (self.ata or (days is not None and days <= 5)):
             flags.append(("warning", "Transport plannen"))
         if self.eta_delay_hours >= 24:
@@ -251,11 +284,12 @@ class RoadTransport(TimeStampedModel):
         ("gepland", "Gepland"),
         ("onderweg", "Onderweg"),
         ("keurpunt", "Bij keurpunt"),
+        ("tussenstop", "Bij tussenstop / in opslag"),
         ("geleverd", "Geleverd"),
         ("afgerond", "Afgerond"),
         ("geannuleerd", "Geannuleerd"),
     ]
-    OPEN_STATUSES = ["gepland", "onderweg", "keurpunt"]
+    OPEN_STATUSES = ["gepland", "onderweg", "keurpunt", "tussenstop"]
 
     customer = models.ForeignKey("core.Customer", verbose_name="klant", on_delete=models.PROTECT, related_name="road_transports")
     customer_reference = models.CharField("klantreferentie", max_length=100, blank=True)
@@ -339,3 +373,61 @@ class RoadTransport(TimeStampedModel):
     @property
     def is_open(self):
         return self.status in self.OPEN_STATUSES
+
+
+class TransportStop(models.Model):
+    """Tussenstop tussen laden en lossen, bijv. keurpunt of opslag in afwachting van een labuitslag."""
+
+    KIND_CHOICES = [
+        ("keurpunt", "Keurpunt"),
+        ("lab", "Opslag: wachten op labuitslag"),
+        ("opslag", "Opslag / koelhuis"),
+        ("douane", "Douane"),
+        ("overslag", "Overslag / ander voertuig"),
+        ("overig", "Overig"),
+    ]
+    KIND_ICONS = {"keurpunt": "clipboard2-check", "lab": "eyedropper", "opslag": "snow", "douane": "shield-check",
+                  "overslag": "arrow-left-right", "overig": "geo-alt"}
+
+    transport = models.ForeignKey(RoadTransport, verbose_name="wegtransport", on_delete=models.CASCADE, related_name="stops")
+    position = models.PositiveSmallIntegerField("volgorde", default=0)
+    kind = models.CharField("soort", max_length=20, choices=KIND_CHOICES, default="keurpunt")
+    inspection_point = models.ForeignKey(
+        "core.InspectionPoint", verbose_name="keurpunt", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    address = models.ForeignKey("core.Address", verbose_name="adres uit adresboek", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    place = models.CharField("plaats / terminal", max_length=250, blank=True)
+    planned_arrival = models.DateTimeField("aankomst gepland", null=True, blank=True)
+    planned_departure = models.DateTimeField("vertrek gepland", null=True, blank=True, help_text="Leeg = tot vrijgave / labuitslag.")
+    arrived_at = models.DateTimeField("aangekomen", null=True, blank=True)
+    departed_at = models.DateTimeField("vertrokken", null=True, blank=True)
+    reference = models.CharField("referentie", max_length=100, blank=True)
+    notes = models.CharField("opmerking", max_length=250, blank=True)
+
+    class Meta:
+        ordering = ["position", "pk"]
+        verbose_name = "tussenstop"
+        verbose_name_plural = "tussenstops"
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.location_name}"
+
+    @property
+    def location_name(self):
+        if self.kind == "keurpunt" and self.inspection_point_id:
+            return str(self.inspection_point)
+        if self.address_id:
+            return str(self.address)
+        return self.place or (str(self.inspection_point) if self.inspection_point_id else "locatie ?")
+
+    @property
+    def icon(self):
+        return self.KIND_ICONS.get(self.kind, "geo-alt")
+
+    @property
+    def state(self):
+        if self.departed_at:
+            return "klaar"
+        if self.arrived_at:
+            return "hier"
+        return "gepland"

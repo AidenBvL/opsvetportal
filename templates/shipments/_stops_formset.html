@@ -1,0 +1,12 @@
+{% load portal %}{# Tussenstops tussen laden en lossen. Verwacht: stops (inline formset). #}
+<div class="form-section" data-stops id="tussenstops">
+  <div class="form-section-title"><i class="bi bi-signpost-split"></i> Tussenstops
+    <span class="fw-normal text-body-secondary text-transform-none ms-1 small">bijv. keurpunt, opslag in afwachting van labuitslag</span></div>
+  {{ stops.management_form }}{% terminal_datalist 'stop-places' %}
+  {% for e in stops.non_form_errors %}<div class="alert alert-danger py-2">{{ e }}</div>{% endfor %}
+  <div class="stop-list" data-stop-list>
+    {% for f in stops %}{% include "shipments/_stop_form.html" %}{% endfor %}
+  </div>
+  <button type="button" class="btn btn-sm btn-outline-primary" data-stop-add><i class="bi bi-plus-lg"></i> Tussenstop toevoegen</button>
+  <template data-stop-template>{% with f=stops.empty_form %}{% include "shipments/_stop_form.html" %}{% endwith %}</template>
+</div>

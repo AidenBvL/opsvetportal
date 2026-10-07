@@ -2,7 +2,7 @@ from django import forms
 
 from planning.models import Employee
 
-from .models import RoadTransport, SeaShipment
+from .models import RoadTransport, SeaShipment, TransportStop
 
 DT = {"type": "datetime-local"}
 DT_FORMAT = "%Y-%m-%dT%H:%M"
@@ -61,11 +61,13 @@ class SeaShipmentForm(forms.ModelForm):
             "customer", "customer_reference", "cory_reference", "container_number", "container_type", "seal_number",
             "shipping_line", "bl_number", "booking_number", "vessel_name", "voyage", "port_of_loading",
             "port_of_discharge", "terminal", "departed_at", "eta", "ata", "free_time_until", "inspection_required", "inspection_point",
-            "ched_number", "inspection_status", "inspection_planned_at", "customs_cleared", "goods_description",
+            "ched_number", "inspection_status", "inspection_planned_at", "customs_cleared", "lab_status", "lab_sampled_at",
+            "lab_expected_at", "lab_result_at", "lab_notes", "goods_description",
             "temperature_setpoint", "gross_weight_kg", "packages", "package_type", "status", "handler", "tracking_enabled", "notes",
         ]
         widgets = {
-            **_dt(["departed_at", "eta", "ata", "inspection_planned_at"]),
+            **_dt(["departed_at", "eta", "ata", "inspection_planned_at", "lab_sampled_at", "lab_result_at"]),
+            "lab_expected_at": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
             "free_time_until": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
             "notes": forms.Textarea(attrs={"rows": 3}),
             "port_of_loading": PortInput(),
@@ -81,6 +83,7 @@ class SeaShipmentForm(forms.ModelForm):
                            "departed_at", "eta", "ata", "free_time_until", "tracking_enabled"]),
         ("Keuring & douane", "clipboard2-check", ["inspection_required", "inspection_point", "ched_number", "inspection_status",
                                                  "inspection_planned_at", "customs_cleared"]),
+        ("Labonderzoek", "eyedropper", ["lab_status", "lab_sampled_at", "lab_expected_at", "lab_result_at", "lab_notes"]),
         ("Lading", "thermometer-snow", ["goods_description", "temperature_setpoint", "gross_weight_kg", "packages", "package_type"]),
         ("Opmerkingen", "chat-left-text", ["notes"]),
     ]
@@ -177,6 +180,40 @@ class RoadTransportForm(forms.ModelForm):
             transport.unloading_address = address_from_text(transport.unloading_place, transport.customer)
             transport.save(update_fields=["unloading_address", "updated_at"])
         return transport
+
+
+class TransportStopForm(forms.ModelForm):
+    class Meta:
+        model = TransportStop
+        fields = ["position", "kind", "inspection_point", "address", "place", "planned_arrival", "planned_departure",
+                  "arrived_at", "departed_at", "reference", "notes"]
+        widgets = {
+            **_dt(["planned_arrival", "planned_departure", "arrived_at", "departed_at"]),
+            "position": forms.HiddenInput(attrs={"data-stop-position": ""}),
+            "kind": forms.Select(attrs={"data-stop-kind": ""}),
+            # Suggesties uit één gedeelde lijst (zie _stops_formset.html) i.p.v. een lijst per stop.
+            "place": forms.TextInput(attrs={"list": "stop-places", "autocomplete": "off"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        from core.models import Address, InspectionPoint
+
+        super().__init__(*args, **kwargs)
+        self.fields["position"].required = False
+        self.fields["inspection_point"].queryset = InspectionPoint.objects.filter(active=True)
+        self.fields["address"].queryset = Address.objects.filter(active=True).select_related("customer").order_by("-kind", "name")
+        self.fields["address"].label_from_instance = lambda a: f"{a} · {a.get_kind_display().split(' (')[0].lower()}"
+        self.fields["place"].help_text = "Of typ een terminal / plaats."
+
+    def clean(self):
+        data = super().clean()
+        if not self.cleaned_data.get("DELETE") and not (data.get("inspection_point") or data.get("address") or data.get("place")):
+            raise forms.ValidationError("Kies een keurpunt of adres, of typ een plaats.")
+        return data
+
+
+def stops_formset(extra=0):
+    return forms.inlineformset_factory(RoadTransport, TransportStop, form=TransportStopForm, extra=extra, can_delete=True)
 
 
 def address_from_text(text, customer):

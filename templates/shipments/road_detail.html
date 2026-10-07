@@ -16,31 +16,49 @@
 </div>
 
 <div class="row g-3">
-  {% for stop in stops %}
-  <div class="col-lg-6"><div class="card h-100">
-    <div class="card-header d-flex align-items-center gap-2"><i class="bi {{ stop.icon }}"></i> {{ stop.title }}
-      {% if stop.address %}<a class="ms-auto small" href="{{ stop.address.maps_url }}" target="_blank" rel="noopener"><i class="bi bi-geo-alt"></i> Route</a>{% endif %}</div>
-    <div class="card-body small">
-      {% if stop.address %}
-        <div class="fw-semibold">{{ stop.address.name }}</div>
-        <div>{% for line in stop.address.lines %}{{ line }}<br>{% endfor %}</div>
-        {% if stop.place and stop.place != stop.address.one_line %}<div class="text-body-secondary mt-1">{{ stop.place }}</div>{% endif %}
-      {% else %}
-        <div class="fw-semibold" style="white-space:pre-line">{{ stop.place|default:"Nog niet ingevuld" }}</div>
-      {% endif %}
-      <dl class="kv mt-3 mb-0">
-        <dt>{{ stop.when_label }}</dt><dd>{{ stop.when|date:"D j M Y H:i"|default:"–" }}{% if stop.until %} – {{ stop.until|date:"H:i" }}{% endif %}</dd>
-        {% if stop.done %}<dt>Geleverd</dt><dd class="text-success">{{ stop.done|date:"D j M H:i" }}</dd>{% endif %}
-        <dt>Referentie</dt><dd class="font-monospace">{{ stop.reference|default:"–" }}</dd>
-        {% if stop.address %}
-          {% if stop.address.opening_hours %}<dt>Ontvangsttijden</dt><dd>{{ stop.address.opening_hours }}</dd>{% endif %}
-          {% if stop.address.booking_required %}<dt>Tijdslot</dt><dd><span class="chip chip-warning">vooraf aanmelden verplicht</span></dd>{% endif %}
-          {% if stop.address.contact_name or stop.address.phone %}<dt>Contact</dt><dd>{{ stop.address.contact_name }}{% if stop.address.phone %} · <a href="tel:{{ stop.address.phone }}">{{ stop.address.phone }}</a>{% endif %}{% if stop.address.email %} · <a href="mailto:{{ stop.address.email }}">{{ stop.address.email }}</a>{% endif %}</dd>{% endif %}
-        {% endif %}
-      </dl>
-    </div>
-  </div></div>
-  {% endfor %}
+  <div class="col-12"><div class="card"><div class="card-header d-flex align-items-center"><i class="bi bi-signpost-split me-2"></i> Route
+    <span class="ms-2 small text-body-secondary">{{ route|length }} stappen</span>
+    {% if perms.shipments.change_roadtransport %}<a class="ms-auto small" href="{% url 'shipments:roadtransport_update' object.pk %}#tussenstops"><i class="bi bi-plus-lg"></i> Tussenstop</a>{% endif %}</div>
+    <div class="card-body"><ol class="route-steps">
+    {% for step in route %}
+      <li class="{% if step.state == 'klaar' %}is-done{% elif step.state == 'hier' or step.next %}is-here{% endif %}">
+        <span class="step-icon"><i class="bi bi-{% if step.state == 'klaar' %}check-lg{% else %}{{ step.icon }}{% endif %}"></i></span>
+        <div class="d-flex flex-wrap align-items-start gap-2">
+          <div class="flex-grow-1">
+            <div class="fw-semibold">{{ step.title }}
+              {% if step.state == 'hier' %}<span class="chip chip-primary ms-1">staat hier</span>{% elif step.next %}<span class="chip chip-primary ms-1">volgende stap</span>{% endif %}
+              {% if step.stop.kind == 'lab' and object.sea_shipment %}{% with sea=object.sea_shipment %}<span class="chip chip-{% if sea.lab_status == 'goed' %}success{% elif sea.lab_status == 'afgekeurd' %}danger{% elif sea.lab_status == 'monster' %}warning{% else %}secondary{% endif %} ms-1">{{ sea.get_lab_status_display }}{% if sea.lab_status == 'monster' and sea.lab_expected_at %}, verwacht {{ sea.lab_expected_at|date:"D j M" }}{% endif %}</span>{% endwith %}{% endif %}
+            </div>
+            <div class="small">
+              {% if step.address %}<span class="fw-semibold">{{ step.address.name }}</span> · {{ step.address.one_line }} <a href="{{ step.address.maps_url }}" target="_blank" rel="noopener" class="ms-1"><i class="bi bi-geo-alt"></i> Route</a>
+              {% elif step.location %}{{ step.location }}{% else %}{{ step.place|default:"Adres nog niet ingevuld" }}{% endif %}
+              {% if step.address and step.place and step.place != step.address.one_line %}<div class="text-body-secondary">{{ step.place }}</div>{% endif %}
+              {% if step.stop.inspection_point.opening_hours %}<div class="text-body-secondary">Open: {{ step.stop.inspection_point.opening_hours }}</div>{% endif %}
+            </div>
+            <div class="small text-body-secondary mt-1 d-flex flex-wrap gap-3">
+              <span><i class="bi bi-calendar-event"></i> {% if step.kind == 'lossen' %}Levering {% elif step.kind == 'laden' %}Laden {% else %}Aankomst {% endif %}{{ step.planned|date:"D j M H:i"|default:"nog niet gepland" }}{% if step.until %} – {% if step.kind == 'stop' %}vertrek {{ step.until|date:"D j M H:i" }}{% else %}{{ step.until|date:"H:i" }}{% endif %}{% elif step.kind == 'stop' %} – tot vrijgave{% endif %}</span>
+              {% if step.stop.arrived_at %}<span class="text-success-emphasis"><i class="bi bi-box-arrow-in-right"></i> aangekomen {{ step.stop.arrived_at|date:"D j M H:i" }}</span>{% endif %}
+              {% if step.stop.departed_at %}<span class="text-success-emphasis"><i class="bi bi-box-arrow-right"></i> vertrokken {{ step.stop.departed_at|date:"D j M H:i" }}</span>{% endif %}
+              {% if step.done %}<span class="text-success-emphasis"><i class="bi bi-check2"></i> geleverd {{ step.done|date:"D j M H:i" }}</span>{% endif %}
+              {% if step.reference %}<span>Ref. <span class="font-monospace">{{ step.reference }}</span></span>{% endif %}
+              {% if step.address.opening_hours %}<span>Ontvangst {{ step.address.opening_hours }}</span>{% endif %}
+              {% if step.address.booking_required %}<span class="chip chip-warning">tijdslot verplicht</span>{% endif %}
+              {% if step.address.phone %}<span><i class="bi bi-telephone"></i> <a href="tel:{{ step.address.phone }}">{{ step.address.phone }}</a>{% if step.address.contact_name %} ({{ step.address.contact_name }}){% endif %}</span>{% endif %}
+            </div>
+            {% if step.stop.notes %}<div class="small mt-1">{{ step.stop.notes }}</div>{% endif %}
+            {% if step.address.instructions and step.kind == 'stop' %}<div class="small mt-1 text-body-secondary"><i class="bi bi-info-circle"></i> {{ step.address.instructions }}</div>{% endif %}
+          </div>
+          {% if perms.shipments.change_roadtransport and step.state != 'klaar' %}
+          <form method="post" class="d-flex gap-1" action="{% if step.kind == 'laden' %}{% url 'shipments:road_step' object.pk 'geladen' %}{% elif step.kind == 'lossen' %}{% url 'shipments:road_step' object.pk 'geleverd' %}{% elif step.state == 'hier' %}{% url 'shipments:road_step' object.pk 'vertrek' %}{% else %}{% url 'shipments:road_step' object.pk 'aankomst' %}{% endif %}">{% csrf_token %}
+            {% if step.stop %}<input type="hidden" name="stop" value="{{ step.stop.pk }}">{% endif %}
+            <button class="btn btn-sm {% if step.state == 'hier' or step.next %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+              {% if step.kind == 'laden' %}<i class="bi bi-truck"></i> Geladen{% elif step.kind == 'lossen' %}<i class="bi bi-check2-circle"></i> Geleverd{% elif step.state == 'hier' %}<i class="bi bi-box-arrow-right"></i> Vertrokken{% else %}<i class="bi bi-box-arrow-in-right"></i> Aangekomen{% endif %}</button>
+          </form>
+          {% endif %}
+        </div>
+      </li>
+    {% endfor %}
+    </ol></div></div></div>
 
   {% if object.driver_instructions %}
   <div class="col-12"><div class="alert alert-info mb-0 small d-flex gap-2"><i class="bi bi-info-circle"></i><div><strong>Instructies voor de chauffeur</strong><div style="white-space:pre-line">{{ object.driver_instructions }}</div></div></div></div>
