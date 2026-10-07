@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .crud import crud_urls
-from .models import Customer, InspectionPoint, Port, RoadCarrier, ShippingLine, Terminal
+from .models import Address, Customer, InspectionPoint, Port, RoadCarrier, ShippingLine, Terminal
 from . import views
 from .forms import TerminalForm
 
@@ -41,6 +41,15 @@ urlpatterns = [
         list_display=["name", "point_type", "traces_code", "city", "phone", "opening_hours", "handles_veterinary", "active"],
         search_fields=["name", "traces_code", "city"],
         list_filters=["point_type"],
+    ),
+    *crud_urls(
+        Address, "core", slug="adressen",
+        fields=["name", "customer", "kind", "is_default", "company", "street", "postal_code", "city", "country", "contact_name",
+                "phone", "email", "opening_hours", "booking_required", "instructions", "active"],
+        list_display=["name", "customer", "kind", "city", "opening_hours", "is_default", "active"],
+        search_fields=["name", "company", "street", "city", "customer__name"],
+        list_filters=["kind", "customer", "active"],
+        queryset=Address.objects.select_related("customer"),
     ),
     *crud_urls(
         Port, "core", slug="havens",

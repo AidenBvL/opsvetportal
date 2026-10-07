@@ -175,6 +175,21 @@
     update();
   });
 
+  // Adres uit het adresboek kiezen: adresveld en chauffeursinstructies invullen.
+  $$("select[data-fill-place]").forEach(select => {
+    select.addEventListener("change", () => {
+      const option = select.selectedOptions[0];
+      if (!option || !option.value) return;
+      const place = document.getElementById(select.dataset.fillPlace);
+      if (place && option.dataset.place) place.value = option.dataset.place;
+      const notes = select.dataset.fillInstructions && document.getElementById(select.dataset.fillInstructions);
+      if (notes && option.dataset.instructions && (!notes.value.trim() || notes.dataset.autoFilled === notes.value)) {
+        notes.value = option.dataset.instructions;
+        notes.dataset.autoFilled = notes.value;
+      }
+    });
+  });
+
   // Formulier: waarschuwen bij weggaan met niet-opgeslagen wijzigingen.
   $$("form[data-dirty-warning]").forEach(form => {
     let dirty = false;

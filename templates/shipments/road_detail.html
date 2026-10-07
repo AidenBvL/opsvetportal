@@ -1,37 +1,78 @@
 {% extends "base.html" %}{% load portal %}
 {% block title %}{{ object }}{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <h3 class="mb-0"><i class="bi bi-truck"></i> {{ object.cory_reference|default:object.customer_reference|default:object.pk }}</h3>
-  {% badge object.status object.get_status_display %} {% badge object.inspection_status object.get_inspection_status_display %}
-  <a class="ms-2" href="{% url 'core:customer_detail' object.customer.pk %}">{{ object.customer }}</a>
-  <div class="ms-auto">
-    {% if perms.actions.add_action %}<a class="btn btn-sm btn-outline-danger" href="{% url 'actions:action_create' %}?road_transport={{ object.pk }}&customer={{ object.customer_id }}">+ Actie</a>
-    <a class="btn btn-sm btn-outline-secondary" href="{% url 'actions:extracost_create' %}?road_transport={{ object.pk }}&customer={{ object.customer_id }}">+ Kosten</a>{% endif %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow"><a href="{% url 'shipments:road_list' %}">Wegtransport</a> · <a href="{% url 'core:customer_detail' object.customer.pk %}">{{ object.customer }}</a></div>
+    <h3 class="d-flex align-items-center gap-2 flex-wrap"><i class="bi bi-truck"></i> {{ object.cory_reference|default:object.customer_reference|default:object.pk }}
+      {% badge object.status object.get_status_display %} {% badge object.inspection_status object.get_inspection_status_display %}</h3>
+    <div class="small text-body-secondary">{{ object.get_direction_display }} · {{ object.get_transport_type_display }}</div>
+  </div>
+  <div class="page-actions">
+    {% if perms.actions.add_action %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'actions:action_create' %}?road_transport={{ object.pk }}&customer={{ object.customer_id }}"><i class="bi bi-check2-square"></i> Actie</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'actions:extracost_create' %}?road_transport={{ object.pk }}&customer={{ object.customer_id }}"><i class="bi bi-currency-euro"></i> Kosten</a>{% endif %}
     {% if perms.shipments.change_roadtransport %}<a class="btn btn-sm btn-primary" href="{% url 'shipments:roadtransport_update' object.pk %}"><i class="bi bi-pencil"></i> Bewerken</a>{% endif %}
   </div>
 </div>
+
 <div class="row g-3">
-<div class="col-md-6"><div class="card"><div class="card-body small"><dl class="row mb-0">
-  <dt class="col-4">Klantreferentie</dt><dd class="col-8">{{ object.customer_reference|default:"-" }}</dd>
-  <dt class="col-4">Richting</dt><dd class="col-8">{{ object.get_direction_display }}</dd>
-  <dt class="col-4">Vervoerder</dt><dd class="col-8">{{ object.carrier|default:"-" }}{% if object.carrier.phone %} · {{ object.carrier.phone }}{% endif %}</dd>
-  <dt class="col-4">Kenteken</dt><dd class="col-8">{{ object.truck_plate|default:"-" }} / {{ object.trailer_plate|default:"-" }}</dd>
-  <dt class="col-4">Chauffeur</dt><dd class="col-8">{{ object.driver_name|default:"-" }} {{ object.driver_phone }}</dd>
-  <dt class="col-4">CMR</dt><dd class="col-8">{{ object.cmr_number|default:"-" }}</dd>
-  <dt class="col-4">Zeecontainer</dt><dd class="col-8">{% if object.sea_shipment %}<a href="{% url 'shipments:sea_detail' object.sea_shipment.pk %}">{{ object.sea_shipment }}</a>{% else %}-{% endif %}</dd>
-  <dt class="col-4">Goederen</dt><dd class="col-8">{{ object.goods_description|default:"-" }}{% if object.temperature_setpoint is not None %} · {{ object.temperature_setpoint }} °C{% endif %}{% if object.pallets %} · {{ object.pallets }} pallets{% endif %}</dd>
-  <dt class="col-4">Behandelaar</dt><dd class="col-8">{{ object.handler|default:"-" }}</dd>
-</dl></div></div></div>
-<div class="col-md-6"><div class="card"><div class="card-body small"><dl class="row mb-0">
-  <dt class="col-4">Laden</dt><dd class="col-8">{{ object.loading_at|date:"l j F H:i"|default:"-" }}<br>{{ object.loading_place }}</dd>
-  <dt class="col-4">Lossen gepland</dt><dd class="col-8">{{ object.delivery_planned_at|date:"l j F H:i"|default:"-" }}<br>{{ object.unloading_place }}</dd>
-  <dt class="col-4">Geleverd</dt><dd class="col-8">{{ object.delivered_at|date:"j F H:i"|default:"-" }}</dd>
-  <dt class="col-4">Keurpunt</dt><dd class="col-8">{{ object.inspection_point|default:"-" }}</dd>
-  <dt class="col-4">CHED</dt><dd class="col-8">{{ object.ched_number|default:"-" }}</dd>
-  <dt class="col-4">Keuring gepland</dt><dd class="col-8">{{ object.inspection_planned_at|date:"j F H:i"|default:"-" }}</dd>
-</dl>{% if object.notes %}<hr><div style="white-space:pre-wrap">{{ object.notes }}</div>{% endif %}</div></div></div>
+  {% for stop in stops %}
+  <div class="col-lg-6"><div class="card h-100">
+    <div class="card-header d-flex align-items-center gap-2"><i class="bi {{ stop.icon }}"></i> {{ stop.title }}
+      {% if stop.address %}<a class="ms-auto small" href="{{ stop.address.maps_url }}" target="_blank" rel="noopener"><i class="bi bi-geo-alt"></i> Route</a>{% endif %}</div>
+    <div class="card-body small">
+      {% if stop.address %}
+        <div class="fw-semibold">{{ stop.address.name }}</div>
+        <div>{% for line in stop.address.lines %}{{ line }}<br>{% endfor %}</div>
+        {% if stop.place and stop.place != stop.address.one_line %}<div class="text-body-secondary mt-1">{{ stop.place }}</div>{% endif %}
+      {% else %}
+        <div class="fw-semibold" style="white-space:pre-line">{{ stop.place|default:"Nog niet ingevuld" }}</div>
+      {% endif %}
+      <dl class="kv mt-3 mb-0">
+        <dt>{{ stop.when_label }}</dt><dd>{{ stop.when|date:"D j M Y H:i"|default:"–" }}{% if stop.until %} – {{ stop.until|date:"H:i" }}{% endif %}</dd>
+        {% if stop.done %}<dt>Geleverd</dt><dd class="text-success">{{ stop.done|date:"D j M H:i" }}</dd>{% endif %}
+        <dt>Referentie</dt><dd class="font-monospace">{{ stop.reference|default:"–" }}</dd>
+        {% if stop.address %}
+          {% if stop.address.opening_hours %}<dt>Ontvangsttijden</dt><dd>{{ stop.address.opening_hours }}</dd>{% endif %}
+          {% if stop.address.booking_required %}<dt>Tijdslot</dt><dd><span class="chip chip-warning">vooraf aanmelden verplicht</span></dd>{% endif %}
+          {% if stop.address.contact_name or stop.address.phone %}<dt>Contact</dt><dd>{{ stop.address.contact_name }}{% if stop.address.phone %} · <a href="tel:{{ stop.address.phone }}">{{ stop.address.phone }}</a>{% endif %}{% if stop.address.email %} · <a href="mailto:{{ stop.address.email }}">{{ stop.address.email }}</a>{% endif %}</dd>{% endif %}
+        {% endif %}
+      </dl>
+    </div>
+  </div></div>
+  {% endfor %}
+
+  {% if object.driver_instructions %}
+  <div class="col-12"><div class="alert alert-info mb-0 small d-flex gap-2"><i class="bi bi-info-circle"></i><div><strong>Instructies voor de chauffeur</strong><div style="white-space:pre-line">{{ object.driver_instructions }}</div></div></div></div>
+  {% endif %}
+
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header"><i class="bi bi-truck"></i> Vervoerder & chauffeur</div><div class="card-body small"><dl class="kv mb-0">
+    <dt>Vervoerder</dt><dd>{{ object.carrier|default:"–" }}{% if object.carrier.phone %} · <a href="tel:{{ object.carrier.phone }}">{{ object.carrier.phone }}</a>{% endif %}</dd>
+    <dt>Chauffeur</dt><dd>{{ object.driver_name|default:"–" }}{% if object.driver_phone %} · <a href="tel:{{ object.driver_phone }}">{{ object.driver_phone }}</a>{% endif %}</dd>
+    <dt>Kenteken</dt><dd class="font-monospace">{{ object.truck_plate|default:"–" }} / {{ object.trailer_plate|default:"–" }}</dd>
+    <dt>CMR</dt><dd class="font-monospace">{{ object.cmr_number|default:"–" }}</dd>
+  </dl></div></div></div>
+
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header"><i class="bi bi-box"></i> Lading</div><div class="card-body small"><dl class="kv mb-0">
+    <dt>Zeecontainer</dt><dd>{% if object.sea_shipment %}<a href="{% url 'shipments:sea_detail' object.sea_shipment.pk %}">{{ object.sea_shipment.container_number|cnr }}</a>{% else %}–{% endif %}</dd>
+    <dt>Goederen</dt><dd>{{ object.goods_description|default:"–" }}</dd>
+    <dt>Temperatuur</dt><dd>{% if object.temperature_setpoint is not None %}{{ object.temperature_setpoint }} °C{% else %}–{% endif %}</dd>
+    <dt>Pallets</dt><dd>{{ object.pallets|default:"–" }}</dd>
+    <dt>Brutogewicht</dt><dd>{% if object.gross_weight_kg is not None %}{{ object.gross_weight_kg|floatformat:"-3g" }} kg{% else %}–{% endif %}</dd>
+  </dl></div></div></div>
+
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header"><i class="bi bi-clipboard2-check"></i> Keuring & lege retour</div><div class="card-body small"><dl class="kv mb-0">
+    <dt>Keurpunt</dt><dd>{{ object.inspection_point|default:"–" }}</dd>
+    <dt>CHED</dt><dd class="font-monospace">{{ object.ched_number|default:"–" }}</dd>
+    <dt>Keuring gepland</dt><dd>{{ object.inspection_planned_at|date:"D j M H:i"|default:"–" }}</dd>
+    <dt>Lege retour naar</dt><dd>{{ object.empty_return_place|default:"–" }}</dd>
+    <dt>Retour uiterlijk</dt><dd>{{ object.empty_return_by|date:"D j M Y"|default:"–" }}</dd>
+    <dt>Behandelaar</dt><dd>{{ object.handler|default:"–" }}</dd>
+  </dl></div></div></div>
+
+  {% if object.notes %}<div class="col-12"><div class="card"><div class="card-header">Opmerkingen</div><div class="card-body small" style="white-space:pre-wrap">{{ object.notes }}</div></div></div>{% endif %}
 </div>
+
 <div class="card mt-3" id="tab-docs"><div class="card-header"><i class="bi bi-paperclip"></i> Documenten</div><div class="card-body">{% include "documents/_attached.html" with kind="weg" %}</div></div>
 <div class="mt-3">{% if perms.core.view_auditlog %}{% include "core/_history.html" %}{% endif %}</div>
 {% endblock %}

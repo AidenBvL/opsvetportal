@@ -306,6 +306,62 @@ class Terminal(TimeStampedModel):
         return result
 
 
+class Address(TimeStampedModel):
+    """Laad- of losadres voor wegtransport, met de vaste afspraken (tijden, aanmelden, instructies)."""
+
+    KIND_CHOICES = [("los", "Losadres"), ("laad", "Laadadres"), ("beide", "Laad- en losadres")]
+
+    name = models.CharField("naam", max_length=100, help_text="Korte naam om te kiezen, bijv. 'Ter Maten Bunschoten'.")
+    customer = models.ForeignKey(
+        Customer, verbose_name="klant", null=True, blank=True, on_delete=models.CASCADE, related_name="addresses",
+        help_text="Leeg laten voor een adres dat voor meerdere klanten gebruikt wordt (bijv. een koelhuis).",
+    )
+    kind = models.CharField("soort", max_length=10, choices=KIND_CHOICES, default="los")
+    is_default = models.BooleanField("standaard losadres van deze klant", default=False)
+    company = models.CharField("bedrijfsnaam", max_length=150, blank=True)
+    street = models.CharField("straat + huisnummer", max_length=150, blank=True)
+    postal_code = models.CharField("postcode", max_length=20, blank=True)
+    city = models.CharField("plaats", max_length=100)
+    country = models.CharField("land", max_length=100, default="Nederland")
+    contact_name = models.CharField("contactpersoon", max_length=100, blank=True)
+    phone = models.CharField("telefoon", max_length=50, blank=True)
+    email = models.EmailField("e-mail", blank=True)
+    opening_hours = models.CharField("ontvangsttijden", max_length=200, blank=True, help_text="Bijv. ma-vr 06:00-15:00.")
+    booking_required = models.BooleanField("tijdslot / vooraanmelding verplicht", default=False)
+    instructions = models.TextField(
+        "instructies voor de chauffeur", blank=True, help_text="Bijv. melden bij portier, dock 4, max. 13,6 m, pallets ruilen.",
+    )
+    active = models.BooleanField("actief", default=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "adres"
+        verbose_name_plural = "adressen"
+
+    def __str__(self):
+        return f"{self.name} ({self.city})" if self.city and self.city.lower() not in self.name.lower() else self.name
+
+    @property
+    def lines(self):
+        return [line for line in [self.company, self.street, " ".join(p for p in [self.postal_code, self.city] if p), self.country] if line]
+
+    @property
+    def one_line(self):
+        return ", ".join(self.lines)
+
+    @property
+    def maps_url(self):
+        from urllib.parse import quote
+
+        return "https://www.google.com/maps/search/?api=1&query=" + quote(", ".join(self.lines[1:] or self.lines))
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_default and self.customer_id:
+            # Eén standaard losadres per klant.
+            Address.objects.filter(customer_id=self.customer_id, is_default=True).exclude(pk=self.pk).update(is_default=False)
+
+
 class JobRun(models.Model):
     """Laatste uitvoering van geplande taken (voorkomt dubbele dagoverzichten na een herstart)."""
 
