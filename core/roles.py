@@ -15,7 +15,7 @@ ROLES = {
 }
 
 
-SYSTEM_MODELS = {"auditlog", "jobrun", "notificationpreference", "userprofile"}
+SYSTEM_MODELS = {"auditlog", "jobrun", "notificationpreference", "userprofile", "listpreference"}
 
 
 def setup_roles():

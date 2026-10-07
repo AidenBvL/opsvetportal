@@ -1,0 +1,39 @@
+<div class="modal fade" id="columnsModal" tabindex="-1" aria-labelledby="columnsTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered"><div class="modal-content">
+    <form method="post" action="{% url 'shipments:sea_columns' %}" data-columns-form>{% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="modal-header"><h5 class="modal-title" id="columnsTitle"><i class="bi bi-layout-three-columns"></i> Kolommen</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Sluiten"></button></div>
+      <div class="modal-body">
+        <p class="small text-body-secondary mb-2">Vink aan wat je wilt zien. Bepaal de volgorde door te slepen aan <i class="bi bi-grip-vertical"></i> of met de pijltjes. Je keuze wordt voor jouw account bewaard.</p>
+        <div class="d-flex flex-wrap gap-1 mb-3" role="group" aria-label="Kant-en-klare indelingen">
+          <span class="small text-body-secondary me-1 align-self-center">Snel kiezen:</span>
+          {% for key, label in presets %}<button type="button" class="btn btn-sm btn-outline-secondary" data-preset="{{ key }}">{{ label }}</button>{% endfor %}
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-preset-none>Niets</button>
+        </div>
+        <ul class="list-group column-list" data-column-list>
+          {% for col in column_choices %}
+          <li class="list-group-item d-flex align-items-center gap-2 py-1" draggable="{% if col.locked %}false{% else %}true{% endif %}" data-key="{{ col.key }}">
+            <i class="bi bi-grip-vertical drag-handle{% if col.locked %} invisible{% endif %}" aria-hidden="true"></i>
+            <input class="form-check-input mt-0" type="checkbox" name="columns" value="{{ col.key }}" id="col-{{ col.key }}"{% if col.key in visible_keys or col.locked %} checked{% endif %}{% if col.locked %} disabled{% endif %}>
+            {% if col.locked %}<input type="hidden" name="columns" value="{{ col.key }}">{% endif %}
+            <label class="form-check-label flex-grow-1" for="col-{{ col.key }}">{{ col.label }}{% if col.locked %} <span class="small text-body-secondary">(altijd)</span>{% endif %}
+              <span class="d-block small text-body-secondary">{{ col.group }}{% if col.help %} · {{ col.help }}{% endif %}</span></label>
+            {% if not col.locked %}<button type="button" class="btn btn-icon btn-sm" data-move="-1" title="Omhoog" aria-label="{{ col.label }} omhoog"><i class="bi bi-arrow-up"></i></button>
+            <button type="button" class="btn btn-icon btn-sm" data-move="1" title="Omlaag" aria-label="{{ col.label }} omlaag"><i class="bi bi-arrow-down"></i></button>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        <div class="form-check form-switch mt-3">
+          <input class="form-check-input" type="checkbox" name="compact" id="col-compact"{% if compact %} checked{% endif %}>
+          <label class="form-check-label" for="col-compact">Compacte weergave (meer rijen op het scherm)</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" name="reset" value="1" class="btn btn-link me-auto px-0">Standaard herstellen</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuleren</button>
+        <button class="btn btn-primary"><i class="bi bi-check2"></i> Opslaan</button>
+      </div>
+    </form>
+  </div></div>
+</div>
+<script type="application/json" id="column-presets">{{ presets_json|safe }}</script>

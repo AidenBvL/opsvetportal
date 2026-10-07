@@ -332,3 +332,15 @@ th[data-sort].desc::after { content: "\2193"; opacity: .9; }
 .doc-row .doc-icon { font-size: 1.3rem; color: var(--bs-secondary-color); }
 .doc-row .doc-name { min-width: 0; flex: 1 1 auto; }
 .doc-row .doc-name a { word-break: break-all; }
+
+/* Kolommenmenu zeevracht */
+.column-list .drag-handle { cursor: grab; color: var(--bs-secondary-color); }
+.column-list li.dragging { opacity: .5; background: var(--brand-soft); }
+.column-list .form-check-label { cursor: pointer; }
+.sea-table.compact td, .sea-table.compact th { padding-top: .3rem; padding-bottom: .3rem; }
+.sea-table.compact .small, .sea-table.compact td .text-body-secondary { font-size: .78rem; }
+.sea-table td .chip { white-space: nowrap; }
+.sea-table th .col-hide { border: 0; background: transparent; color: var(--bs-secondary-color); padding: 0 0 0 4px; opacity: 0; font-size: .85em; }
+.sea-table th:hover .col-hide, .sea-table th .col-hide:focus-visible { opacity: 1; }
+.sea-table th .col-hide:hover { color: var(--bs-danger); }
+@media (hover: none) { .sea-table th .col-hide { opacity: .6; } }

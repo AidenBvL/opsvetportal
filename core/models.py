@@ -362,6 +362,23 @@ class Address(TimeStampedModel):
             Address.objects.filter(customer_id=self.customer_id, is_default=True).exclude(pk=self.pk).update(is_default=False)
 
 
+class ListPreference(models.Model):
+    """Welke kolommen iemand in een lijst ziet, en in welke volgorde."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="list_preferences")
+    key = models.CharField(max_length=40)
+    columns = models.JSONField(default=list)
+    compact = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "key"], name="unique_list_preference")]
+        verbose_name = "lijstweergave"
+        verbose_name_plural = "lijstweergaven"
+
+    def __str__(self):
+        return f"{self.user} · {self.key}"
+
+
 class JobRun(models.Model):
     """Laatste uitvoering van geplande taken (voorkomt dubbele dagoverzichten na een herstart)."""
 

@@ -57,7 +57,7 @@
   // Sorteerbare kolommen: <th data-sort> (optioneel data-sort="num" of "date"), waarde uit data-value of tekst.
   document.addEventListener("click", e => {
     const th = e.target.closest("th[data-sort]");
-    if (!th) return;
+    if (!th || e.target.closest(".col-hide")) return;
     const table = th.closest("table"), tbody = table.tBodies[0];
     const idx = Array.from(th.parentNode.children).indexOf(th);
     const asc = !th.classList.contains("asc");
@@ -187,6 +187,58 @@
         notes.value = option.dataset.instructions;
         notes.dataset.autoFilled = notes.value;
       }
+    });
+  });
+
+  // Kolom direct verbergen vanuit de kolomkop (via het kolommenmenu, zodat het bewaard wordt).
+  document.addEventListener("click", e => {
+    const btn = e.target.closest("[data-hide-col]");
+    if (!btn) return;
+    const box = document.getElementById(`col-${btn.dataset.hideCol}`);
+    if (!box) return;
+    box.checked = false;
+    box.closest("form").submit();
+  });
+
+  // Kolommenmenu: volgorde slepen of met pijltjes, kant-en-klare indelingen.
+  $$("[data-column-list]").forEach(list => {
+    const items = () => $$("li[data-key]", list);
+    const lockedCount = () => items().filter(li => li.getAttribute("draggable") === "false").length;
+    let dragged = null;
+    list.addEventListener("dragstart", e => {
+      dragged = e.target.closest("li[draggable=true]");
+      if (!dragged) return;
+      dragged.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    list.addEventListener("dragend", () => { if (dragged) dragged.classList.remove("dragging"); dragged = null; });
+    list.addEventListener("dragover", e => {
+      if (!dragged) return;
+      e.preventDefault();
+      const after = items().filter(li => li !== dragged && li.getAttribute("draggable") === "true")
+        .find(li => e.clientY < li.getBoundingClientRect().top + li.offsetHeight / 2);
+      if (after) list.insertBefore(dragged, after); else list.appendChild(dragged);
+    });
+    list.addEventListener("click", e => {
+      const btn = e.target.closest("[data-move]");
+      if (!btn) return;
+      const li = btn.closest("li"), all = items(), i = all.indexOf(li), j = i + Number(btn.dataset.move);
+      if (j < lockedCount() || j >= all.length) return;
+      if (Number(btn.dataset.move) < 0) list.insertBefore(li, all[j]); else list.insertBefore(all[j], li);
+      btn.focus();
+    });
+    const form = list.closest("form");
+    const presets = JSON.parse(($("#column-presets") || {}).textContent || "{}");
+    form.addEventListener("click", e => {
+      const btn = e.target.closest("[data-preset], [data-preset-none]");
+      if (!btn) return;
+      const keys = btn.dataset.preset ? presets[btn.dataset.preset].columns : [];
+      items().forEach(li => { const box = $("input[type=checkbox]", li); if (!box.disabled) box.checked = keys.includes(li.dataset.key); });
+      // Gekozen kolommen in de volgorde van de indeling bovenaan, de rest eronder.
+      keys.slice().reverse().forEach(key => {
+        const li = items().find(x => x.dataset.key === key);
+        if (li && li.getAttribute("draggable") === "true") list.insertBefore(li, items()[lockedCount()]);
+      });
     });
   });
 

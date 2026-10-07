@@ -169,6 +169,43 @@ class SeaShipment(TimeStampedModel):
         return line.tracking_url_template.replace("{container}", self.container_number).replace("{number}", number)
 
     @property
+    def active_road_transports(self):
+        """Niet-geannuleerde wegtransporten, vroegste eerst (gebruikt de prefetch van de lijst)."""
+        transports = [r for r in self.road_transports.all() if r.status != "geannuleerd"]
+        return sorted(transports, key=lambda r: (r.loading_at is None, r.loading_at or r.created_at))
+
+    @property
+    def attention(self):
+        """Wat aandacht vraagt, als (niveau, tekst): danger, warning of info."""
+        if not self.is_open:
+            return []
+        flags = []
+        days = self.days_to_eta
+        soon = bool(self.ata) or (days is not None and days <= 3)
+        if self.vessel_changed:
+            flags.append(("danger", "Schipwissel"))
+        if self.inspection_required and self.inspection_status == "aan_te_melden":
+            flags.append(("danger" if soon else "warning", "CHED aanmelden"))
+        left = self.free_days_left
+        if left is not None:
+            if left < 0:
+                flags.append(("danger", f"Vrije dagen {-left} d verlopen"))
+            elif left <= 2:
+                flags.append(("danger" if left == 0 else "warning", "Laatste vrije dag" if left == 0 else f"Nog {left} vrije dag{'en' if left > 1 else ''}"))
+        if not self.active_road_transports and (self.ata or (days is not None and days <= 5)):
+            flags.append(("warning", "Transport plannen"))
+        if self.eta_delay_hours >= 24:
+            flags.append(("info", f"{self.eta_delay_hours} u vertraagd"))
+        if self.tracking_last_error:
+            flags.append(("info", "Trackingfout"))
+        return flags
+
+    @property
+    def attention_score(self):
+        weights = {"danger": 10, "warning": 3, "info": 1}
+        return sum(weights[level] for level, _text in self.attention)
+
+    @property
     def demurrage_risk(self):
         if not self.free_time_until or not self.is_open:
             return False

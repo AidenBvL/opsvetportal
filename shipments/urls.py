@@ -25,6 +25,7 @@ urlpatterns = [
     path("zeevracht/nieuw/", views.SeaCreateView.as_view(), name="seashipment_create"),
     path("zeevracht/meerdere/", views.BulkCreateView.as_view(), name="sea_bulk"),
     path("zeevracht/verversen/", views.refresh_all_view, name="sea_refresh_all"),
+    path("zeevracht/kolommen/", views.save_columns, name="sea_columns"),
     path("zeevracht/<int:pk>/", views.SeaDetailView.as_view(), name="sea_detail"),
     path("zeevracht/<int:pk>/bewerken/", views.SeaUpdateView.as_view(), name="seashipment_update"),
     path("zeevracht/<int:pk>/verwijderen/", SeaDeleteView.as_view(), name="seashipment_delete"),
