@@ -49,7 +49,7 @@
   // Klikbare tabelrijen (behalve als je op een link/knop/formulier klikt).
   document.addEventListener("click", e => {
     const row = e.target.closest("tr[data-href]");
-    if (!row || e.target.closest("a, button, input, select, textarea, label, form")) return;
+    if (!row || e.target.closest("a, button, input, select, textarea, label, form, [data-edit]")) return;
     if (e.ctrlKey || e.metaKey) window.open(row.dataset.href, "_blank");
     else window.location.href = row.dataset.href;
   });
@@ -295,6 +295,98 @@
       }
     });
   });
+
+  // Direct bewerken in de lijst: klik op een cel met data-edit, pas aan, Enter/kiezen = opslaan, Esc = annuleren.
+  const inline = $("[data-inline-edit]");
+  if (inline) {
+    const specs = JSON.parse(($("#inline-specs") || {}).textContent || "{}");
+    const token = ($("input[name=csrfmiddlewaretoken]", inline) || {}).value;
+    const urlFor = pk => inline.dataset.urlTemplate.replace("/0/", `/${pk}/`);
+    const flash = (row, cls) => { row.classList.add(cls); setTimeout(() => row.classList.remove(cls), 1600); };
+
+    const save = async (td, value) => {
+      const row = td.closest("tr"), field = td.dataset.edit;
+      td.classList.add("is-saving");
+      try {
+        const body = new URLSearchParams({ field, value });
+        const res = await fetch(urlFor(row.dataset.row), { method: "POST", body, headers: { "X-CSRFToken": token, "X-Requested-With": "fetch" } });
+        const data = await res.json().catch(() => ({ ok: false, error: "Opslaan mislukt." }));
+        if (!data.ok) throw new Error(data.error || "Opslaan mislukt.");
+        const tmp = document.createElement("tbody");
+        tmp.innerHTML = data.html.trim();
+        const fresh = tmp.firstElementChild;
+        row.replaceWith(fresh);
+        flash(fresh, "row-saved");
+        const again = $(`td[data-edit="${field}"]`, fresh);
+        if (again) again.focus();
+      } catch (err) {
+        td.classList.remove("is-saving");
+        close(td);
+        td.classList.add("is-error");
+        td.title = err.message;
+        setTimeout(() => { td.classList.remove("is-error"); td.removeAttribute("title"); }, 4000);
+      }
+    };
+
+    const close = td => {
+      const ed = $(".inline-editor", td);
+      if (ed) ed.remove();
+      td.classList.remove("is-editing");
+    };
+
+    const open = td => {
+      const spec = specs[td.dataset.edit];
+      if (!spec || td.classList.contains("is-editing")) return;
+      const current = td.dataset.editValue || "";
+      if (spec.type === "bool") { save(td, current === "1" ? "0" : "1"); return; }
+      $$("td.is-editing").forEach(close);
+      let input;
+      if (spec.type === "select") {
+        input = document.createElement("select");
+        input.className = "form-select form-select-sm";
+        const opts = (spec.nullable && !spec.choices.some(c => c[0] === "") ? [["", "–"]] : []).concat(spec.choices);
+        opts.forEach(([v, l]) => { const o = new Option(l, v, false, v === current); input.add(o); });
+        input.addEventListener("change", () => save(td, input.value));
+      } else {
+        input = document.createElement("input");
+        input.className = "form-control form-control-sm";
+        input.type = { date: "date", datetime: "datetime-local", number: "number" }[spec.type] || "text";
+        if (spec.type === "number") input.step = "any";
+        input.value = current;
+        input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); save(td, input.value); } });
+        input.addEventListener("blur", () => setTimeout(() => {
+          if (!td.isConnected || !td.classList.contains("is-editing")) return;
+          if (input.value !== current) save(td, input.value); else close(td);
+        }, 150));
+      }
+      input.setAttribute("aria-label", spec.label);
+      input.addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); close(td); td.focus(); } });
+      const wrap = document.createElement("div");
+      wrap.className = "inline-editor";
+      wrap.appendChild(input);
+      if (spec.type !== "select") {
+        const hint = document.createElement("div");
+        hint.className = "inline-hint";
+        hint.textContent = "Enter = opslaan · Esc = annuleren";
+        wrap.appendChild(hint);
+      }
+      td.classList.add("is-editing");
+      td.appendChild(wrap);
+      input.focus();
+      if (input.showPicker && spec.type === "select") { try { input.showPicker(); } catch (e) { /* niet overal ondersteund */ } }
+    };
+
+    document.addEventListener("click", e => {
+      const td = e.target.closest("td[data-edit]");
+      if (!td || e.target.closest("a, .inline-editor")) return;
+      e.preventDefault();
+      open(td);
+    });
+    document.addEventListener("keydown", e => {
+      const td = e.target.matches && e.target.matches("td[data-edit]") ? e.target : null;
+      if (td && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(td); }
+    });
+  }
 
   // Formulier: waarschuwen bij weggaan met niet-opgeslagen wijzigingen.
   $$("form[data-dirty-warning]").forEach(form => {

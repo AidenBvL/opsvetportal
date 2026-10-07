@@ -220,3 +220,10 @@ def terminal_datalist(list_id):
 
     options = format_html_join("", '<option value="{}">{}</option>', ((t["label"], t["locode"]) for t in port_index()["terminals"]))
     return format_html('<datalist id="{}">{}</datalist>', list_id, options)
+
+
+@register.simple_tag
+def edit_value(obj, field):
+    from shipments.inline import edit_value as value
+
+    return value(obj, field)

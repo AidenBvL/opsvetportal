@@ -1,14 +1,43 @@
-{% extends "core/generic_list.html" %}{% load portal %}
-{% block list_actions %}
-<ul class="nav nav-pills ms-3">{% for key, label in "open:Open,alle:Alle"|split_pairs %}<li class="nav-item"><a class="nav-link py-1{% if view == key %} active{% endif %}" href="?weergave={{ key }}">{{ label }}</a></li>{% endfor %}</ul>
-{% endblock %}
-{% block extra_filters %}<input type="hidden" name="weergave" value="{{ view }}">{% endblock %}
-{% block thead %}<th>Referentie</th><th>Klant</th><th>Richting</th><th>Vervoerder</th><th>Container</th><th>Laden</th><th>Lossen</th><th>Keurpunt</th><th>Keuring</th><th>Status</th>{% endblock %}
-{% block row %}
-<td><a class="fw-semibold" href="{% url 'shipments:road_detail' obj.pk %}">{{ obj.cory_reference|default:obj.customer_reference|default:obj.pk }}</a></td>
-<td>{{ obj.customer }}</td><td>{{ obj.get_direction_display }}</td><td>{{ obj.carrier|default:"-" }}{% if obj.truck_plate %}<div class="small text-muted">{{ obj.truck_plate }} {{ obj.trailer_plate }}</div>{% endif %}</td>
-<td>{% if obj.sea_shipment %}<a href="{% url 'shipments:sea_detail' obj.sea_shipment.pk %}">{{ obj.sea_shipment.container_number }}</a>{% else %}-{% endif %}</td>
-<td>{{ obj.loading_at|date:"D j/n H:i"|default:"-" }}<div class="small text-muted">{{ obj.loading_place }}</div></td>
-<td>{{ obj.delivery_planned_at|date:"D j/n H:i"|default:"-" }}<div class="small text-muted">{{ obj.unloading_place }}</div></td>
-<td>{{ obj.inspection_point|default:"-" }}</td><td>{% badge obj.inspection_status obj.get_inspection_status_display %}</td><td>{% badge obj.status obj.get_status_display %}</td>
+{% extends "base.html" %}{% load portal %}
+{% block title %}Wegtransport{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Zendingen</div><h3>Wegtransport</h3></div>
+  <div class="page-actions">{% if create_url %}<a href="{{ create_url }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Wegtransport</a>{% endif %}</div>
+</div>
+<div class="view-pills">
+  {% for key, label in "open:Open,alle:Alle"|split_pairs %}<a class="view-pill{% if view == key %} active{% endif %}" href="?weergave={{ key }}">{{ label }}</a>{% endfor %}
+</div>
+<div class="card">
+  <form class="toolbar" method="get">
+    <input type="hidden" name="weergave" value="{{ view }}">
+    <input class="form-control form-control-sm search" name="q" value="{{ q }}" placeholder="Zoek referentie, klant, container, kenteken, CMR…">
+    {% for f in filters %}
+    <select name="{{ f.name }}" class="form-select form-select-sm" onchange="this.form.submit()">
+      <option value="">{{ f.label|capfirst }}: alle</option>
+      {% for value, label in f.options %}<option value="{{ value }}"{% if value == f.value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    {% endfor %}
+    <button class="btn btn-sm btn-outline-secondary">Filter</button>
+    {% if perms.shipments.change_roadtransport %}<span class="small text-body-secondary d-none d-lg-inline"><i class="bi bi-pencil"></i> klik op een cel om aan te passen</span>{% endif %}
+    <span class="ms-auto small text-body-secondary">{{ paginator.count }} transport{{ paginator.count|pluralize:"en" }}</span>
+  </form>
+  <div class="table-responsive">
+  <table class="table table-hover align-middle sea-table">
+    <thead><tr>
+      <th data-sort>Referentie</th><th data-sort>Klant / container</th><th data-sort>Vervoerder</th><th data-sort="date">Laden</th>
+      <th data-sort>Ref. ophalen</th><th>Tussenstops</th><th data-sort="date">Levering</th><th data-sort>Losadres</th><th data-sort>Ref. lossen</th>
+      <th data-sort>Keuring</th><th data-sort>Status</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for obj in object_list %}{% include "shipments/_road_row.html" %}
+    {% empty %}<tr><td colspan="12"><div class="empty-state"><i class="bi bi-truck"></i>Geen transporten in deze weergave.{% if create_url %}<div class="mt-2"><a href="{{ create_url }}" class="btn btn-sm btn-primary">Wegtransport plannen</a></div>{% endif %}</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% include "core/_pagination.html" %}
+{% if perms.shipments.change_roadtransport %}<div data-inline-edit data-url-template="{% url 'shipments:road_inline' 0 %}" hidden>{% csrf_token %}</div>
+<script type="application/json" id="inline-specs">{{ inline_specs_json|safe }}</script>{% endif %}
 {% endblock %}

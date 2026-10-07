@@ -737,3 +737,116 @@ class StopsAndLabTests(TestCase):
         self.assertEqual(self.sea.lab_status, "goed")
         self.assertIsNotNone(self.sea.lab_result_at)
         self.assertNotIn("Wacht op labuitslag", [text for _l, text in self.sea.attention])
+
+
+class InlineEditAndReleaseTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser("admin", "a@example.com", "pw")
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(name="J.A. Ter Maten")
+        self.sea = SeaShipment.objects.create(customer=self.customer, container_number="SEGU9074220",
+                                              ata=timezone.now() - timedelta(hours=5), inspection_required=False)
+        self.url = f"/zendingen/zeevracht/{self.sea.pk}/veld/"
+
+    def edit(self, field, value):
+        return self.client.post(self.url, {"field": field, "value": value})
+
+    def test_inline_select_date_bool_and_text(self):
+        r = self.edit("carrier_release", "vrij")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(f'data-row="{self.sea.pk}"', r.json()["html"])
+        self.edit("release_reference", "PIN 4829")
+        self.edit("free_time_until", "2026-10-20")
+        self.edit("customs_cleared", "1")
+        self.edit("temperature_setpoint", "-21.5")
+        self.sea.refresh_from_db()
+        self.assertEqual(self.sea.carrier_release, "vrij")
+        self.assertIsNotNone(self.sea.carrier_released_at)  # datum automatisch
+        self.assertEqual(self.sea.release_reference, "PIN 4829")
+        self.assertEqual(str(self.sea.free_time_until), "2026-10-20")
+        self.assertTrue(self.sea.customs_cleared)
+        self.assertEqual(str(self.sea.temperature_setpoint), "-21.5")
+        self.edit("customs_cleared", "0")
+        self.sea.refresh_from_db()
+        self.assertFalse(self.sea.customs_cleared)
+        # Andere velden blijven ongemoeid.
+        self.assertEqual(self.sea.customer, self.customer)
+
+    def test_inline_rejects_bad_values_and_unknown_fields(self):
+        self.assertEqual(self.edit("carrier_release", "onzin").status_code, 400)
+        self.assertEqual(self.edit("customer", str(self.customer.pk)).status_code, 400)
+        self.assertEqual(self.edit("free_time_until", "geen datum").status_code, 400)
+        self.client.logout()
+        self.assertNotEqual(self.edit("status", "vrij").status_code, 200)
+
+    def test_inline_datetime(self):
+        self.edit("eta", "2026-10-09T07:30")
+        self.sea.refresh_from_db()
+        self.assertEqual(timezone.localtime(self.sea.eta).strftime("%d-%m %H:%M"), "09-10 07:30")
+
+    def test_pickup_blockers_and_attention(self):
+        self.assertEqual(self.sea.pickup_blockers, ["rederij", "kosten", "douane"])
+        texts = [t for _l, t in self.sea.attention]
+        self.assertIn("Vrijgave rederij regelen", texts)
+        self.assertIn("Factuur rederij opvragen", texts)
+        self.edit("local_charges", "ontvangen")
+        self.sea.refresh_from_db()
+        self.assertIn("Lokale kosten betalen", [t for _l, t in self.sea.attention])
+        self.assertIsNotNone(self.sea.invoice_requested_at)  # ontvangen = ook opgevraagd
+        for field, value in [("carrier_release", "vrij"), ("local_charges", "betaald"), ("customs_cleared", "1")]:
+            self.edit(field, value)
+        self.sea.refresh_from_db()
+        self.assertEqual(self.sea.pickup_blockers, [])
+        self.assertIsNotNone(self.sea.invoice_requested_at)
+        self.assertIsNotNone(self.sea.local_charges_paid_at)
+        page = self.client.get(f"/zendingen/zeevracht/{self.sea.pk}/")
+        self.assertContains(page, "klaar om uit te halen")
+
+    def test_list_marks_editable_cells(self):
+        page = self.client.get("/zendingen/zeevracht/")
+        self.assertContains(page, 'data-edit="status"')
+        self.assertContains(page, 'id="inline-specs"')
+        self.assertIn('"carrier_release"', page.context["inline_specs_json"])
+
+
+class RoadInlineEditTests(TestCase):
+    def setUp(self):
+        from core.models import Address, RoadCarrier
+
+        from .models import RoadTransport
+
+        self.client.force_login(User.objects.create_superuser("admin", "a@example.com", "pw"))
+        customer = Customer.objects.create(name="J.A. Ter Maten")
+        self.carrier = RoadCarrier.objects.create(name="Koeltransport Rijnmond")
+        self.address = Address.objects.create(name="Ter Maten Bunschoten", customer=customer, company="J.A. Ter Maten",
+                                              street="De Kooihoek 7", postal_code="3751 LZ", city="Bunschoten",
+                                              instructions="Melden bij portier.")
+        self.transport = RoadTransport.objects.create(customer=customer, unloading_place="oud adres")
+        self.url = f"/zendingen/weg/{self.transport.pk}/veld/"
+
+    def test_list_has_editable_cells(self):
+        page = self.client.get("/zendingen/weg/")
+        self.assertContains(page, 'data-edit="carrier"')
+        self.assertContains(page, 'data-edit="unloading_address"')
+        self.assertIn("Koeltransport Rijnmond", page.context["inline_specs_json"])
+
+    def test_edit_carrier_dates_reference_status(self):
+        for field, value in [("carrier", self.carrier.pk), ("loading_at", "2026-10-09T07:30"), ("loading_reference", "PIN 4829"),
+                             ("status", "onderweg")]:
+            r = self.client.post(self.url, {"field": field, "value": value})
+            self.assertEqual(r.status_code, 200, r.content)
+        self.transport.refresh_from_db()
+        self.assertEqual(self.transport.carrier, self.carrier)
+        self.assertEqual(timezone.localtime(self.transport.loading_at).strftime("%H:%M"), "07:30")
+        self.assertEqual((self.transport.loading_reference, self.transport.status), ("PIN 4829", "onderweg"))
+        self.assertIn("Koeltransport Rijnmond", self.client.post(self.url, {"field": "status", "value": "gepland"}).json()["html"])
+
+    def test_changing_unloading_address_updates_place_and_instructions(self):
+        self.client.post(self.url, {"field": "unloading_address", "value": self.address.pk})
+        self.transport.refresh_from_db()
+        self.assertEqual(self.transport.unloading_place, "J.A. Ter Maten, De Kooihoek 7, 3751 LZ Bunschoten, Nederland")
+        self.assertEqual(self.transport.driver_instructions, "Melden bij portier.")
+
+    def test_rejects_non_editable_and_invalid(self):
+        self.assertEqual(self.client.post(self.url, {"field": "customer", "value": "1"}).status_code, 400)
+        self.assertEqual(self.client.post(self.url, {"field": "status", "value": "kwijt"}).status_code, 400)

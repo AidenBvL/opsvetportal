@@ -32,6 +32,7 @@ urlpatterns = [
     path("zeevracht/<int:pk>/verversen/", views.refresh_view, name="sea_refresh"),
     path("zeevracht/<int:pk>/schipwissel-gezien/", views.ack_vessel_change, name="sea_ack_vessel"),
     path("zeevracht/<int:pk>/snel/", views.quick_update, name="sea_quick"),
+    path("zeevracht/<int:pk>/veld/", views.inline_update, name="sea_inline"),
     path("zeevracht/<int:pk>/plakken/", views.paste_tracking, name="sea_paste"),
     path("weg/", views.RoadListView.as_view(), name="roadtransport_list"),
     path("weg/", views.RoadListView.as_view(), name="road_list"),
@@ -40,4 +41,5 @@ urlpatterns = [
     path("weg/<int:pk>/bewerken/", views.RoadUpdateView.as_view(), name="roadtransport_update"),
     path("weg/<int:pk>/verwijderen/", RoadDeleteView.as_view(), name="roadtransport_delete"),
     path("weg/<int:pk>/stap/<str:action>/", views.road_step, name="road_step"),
+    path("weg/<int:pk>/veld/", views.road_inline_update, name="road_inline"),
 ]
