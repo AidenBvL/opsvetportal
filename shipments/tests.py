@@ -602,3 +602,59 @@ class RoadAddressTests(TestCase):
         self.address.refresh_from_db()
         self.assertFalse(self.address.is_default)
         self.assertTrue(second.is_default)
+
+
+class SeaColumnsTests(TestCase):
+    def setUp(self):
+        from core.models import Address
+
+        from .models import RoadTransport
+
+        self.user = User.objects.create_superuser("admin", "a@example.com", "pw")
+        self.client.force_login(self.user)
+        customer = Customer.objects.create(name="J.A. Ter Maten")
+        self.sea = SeaShipment.objects.create(customer=customer, container_number="SEGU9074220", eta=timezone.now() + timedelta(days=2),
+                                              inspection_required=True)
+        self.other = SeaShipment.objects.create(customer=customer, container_number="CSQU3054383", eta=timezone.now() + timedelta(days=1))
+        address = Address.objects.create(name="Ter Maten Bunschoten", customer=customer, city="Bunschoten", booking_required=True)
+        RoadTransport.objects.create(customer=customer, sea_shipment=self.sea, unloading_address=address,
+                                     loading_at=timezone.make_aware(datetime(2026, 10, 9, 7, 30)),
+                                     delivery_planned_at=timezone.make_aware(datetime(2026, 10, 9, 11, 0)))
+
+    def test_default_columns_show_road_transport_and_attention(self):
+        page = self.client.get("/zendingen/zeevracht/")
+        self.assertContains(page, "Ophalen (transport)")
+        self.assertContains(page, "Ter Maten Bunschoten")
+        self.assertContains(page, "vr 9/10 07:30")
+        self.assertContains(page, "CHED aanmelden")
+        # Container zonder transport die binnen 5 dagen aankomt: plannen.
+        self.assertIn(("warning", "Transport plannen"), self.other.attention)
+        self.assertNotIn(("warning", "Transport plannen"), self.sea.attention)
+
+    def test_choose_and_order_columns(self):
+        from core.models import ListPreference
+
+        r = self.client.post("/zendingen/zeevracht/kolommen/", {
+            "columns": ["status", "road_carrier", "nonsense", "status"], "compact": "on", "next": "/zendingen/zeevracht/?weergave=alle",
+        })
+        self.assertRedirects(r, "/zendingen/zeevracht/?weergave=alle", fetch_redirect_response=False)
+        pref = ListPreference.objects.get(user=self.user)
+        self.assertEqual(pref.columns, ["container", "status", "road_carrier"])  # container altijd vooraan, onzin eruit
+        self.assertTrue(pref.compact)
+        page = self.client.get("/zendingen/zeevracht/")
+        self.assertEqual([c.key for c in page.context["columns"]], ["container", "status", "road_carrier"])
+        self.assertNotContains(page, ">ETA / ATA</th>")
+        self.client.post("/zendingen/zeevracht/kolommen/", {"reset": "1"})
+        self.assertEqual(self.client.get("/zendingen/zeevracht/").context["columns"][1].key, "attention")
+
+    def test_all_columns_render(self):
+        from .columns import PRESETS
+
+        self.client.post("/zendingen/zeevracht/kolommen/", {"columns": PRESETS["alles"][1]})
+        page = self.client.get("/zendingen/zeevracht/?weergave=alle")
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(len(page.context["columns"]), len(PRESETS["alles"][1]))
+
+    def test_unsafe_next_is_ignored(self):
+        r = self.client.post("/zendingen/zeevracht/kolommen/", {"columns": ["status"], "next": "https://evil.example/"})
+        self.assertRedirects(r, "/zendingen/zeevracht/", fetch_redirect_response=False)

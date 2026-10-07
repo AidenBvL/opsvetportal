@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import permission_required
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.views import generic
 from django.views.decorators.http import require_POST
@@ -53,15 +54,37 @@ class SeaListView(CrudListView):
     paginate_by = 100
 
     def get_queryset(self):
-        qs = super().get_queryset().select_related("customer", "shipping_line", "inspection_point", "handler")
+        from django.db.models import Count, Prefetch
+
+        from actions.models import Action
+
+        road = RoadTransport.objects.select_related("carrier", "loading_address", "unloading_address")
+        qs = (super().get_queryset()
+              .select_related("customer", "shipping_line", "inspection_point", "handler")
+              .prefetch_related(Prefetch("road_transports", queryset=road))
+              .annotate(document_count=Count("documents", distinct=True),
+                        open_action_count=Count("actions", filter=Q(actions__status__in=Action.OPEN_STATUSES), distinct=True)))
         return sea_view_filter(qs, self.request.GET.get("weergave", "open")).order_by("eta")
 
     def get_context_data(self, **kwargs):
+        import json
+
+        from .columns import PRESETS, SEA_COLUMNS, user_columns
+
         context = super().get_context_data(**kwargs)
         base = SeaShipment.objects.all()
+        columns, compact = user_columns(self.request.user)
+        visible = {c.key for c in columns}
         context["view"] = self.request.GET.get("weergave", "open")
         context["views"] = [{"key": k, "label": label, "count": sea_view_filter(base, k).count()} for k, label in SEA_VIEWS]
         context["now"] = timezone.now()
+        context["columns"] = columns
+        context["compact"] = compact
+        # Kolommenmenu: eerst de zichtbare in hun volgorde, daarna de rest.
+        context["column_choices"] = columns + [c for c in SEA_COLUMNS if c.key not in visible]
+        context["visible_keys"] = visible
+        context["presets_json"] = json.dumps({key: {"label": label, "columns": cols} for key, (label, cols) in PRESETS.items()})
+        context["presets"] = [(key, label) for key, (label, _cols) in PRESETS.items()]
         return context
 
     def render_to_response(self, context, **kwargs):
@@ -77,16 +100,47 @@ class SeaListView(CrudListView):
             response.write("\ufeff")
             writer = csv.writer(response, delimiter=";")
             writer.writerow(["Container", "Klant", "Klantref", "Cory ref", "B/L", "Rederij", "Schip", "Reis", "Laadhaven", "Loshaven", "Terminal", "ETA", "ATA",
-                             "Keurpunt", "CHED", "Keuring", "Status", "Vrije dagen t/m", "Behandelaar"])
+                             "Keurpunt", "CHED", "Keuring", "Status", "Vrije dagen t/m", "Behandelaar",
+                             "Laden gepland", "Laadadres", "Levering gepland", "Losadres", "Vervoerder", "Transportstatus"])
             fmt = lambda d: timezone.localtime(d).strftime("%d-%m-%Y %H:%M") if d else ""  # noqa: E731
             for s in self.object_list:
                 writer.writerow([s.container_number, s.customer, s.customer_reference, s.cory_reference, s.bl_number,
                                  s.shipping_line or "", s.vessel_name, s.voyage, port_label(s.port_of_loading),
                                  port_label(s.port_of_discharge), s.terminal, fmt(s.eta), fmt(s.ata), s.inspection_point or "",
                                  s.ched_number, s.get_inspection_status_display(), s.get_status_display(),
-                                 s.free_time_until.strftime("%d-%m-%Y") if s.free_time_until else "", s.handler or ""])
+                                 s.free_time_until.strftime("%d-%m-%Y") if s.free_time_until else "", s.handler or "",
+                                 *_road_csv(s.active_road_transports[:1], fmt)])
             return response
         return super().render_to_response(context, **kwargs)
+
+
+def _road_csv(transports, fmt):
+    if not transports:
+        return ["", "", "", "", "", ""]
+    r = transports[0]
+    return [fmt(r.loading_at), r.loading_place, fmt(r.delivery_planned_at), r.unloading_place, r.carrier or "", r.get_status_display()]
+
+
+@require_POST
+@permission_required("shipments.view_seashipment", raise_exception=True)
+def save_columns(request):
+    """Bewaar welke kolommen deze gebruiker in de zeevrachtlijst ziet, in de gekozen volgorde."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    from core.models import ListPreference
+
+    from .columns import DEFAULT_COLUMNS, PREFERENCE_KEY, clean_columns
+
+    columns = DEFAULT_COLUMNS if request.POST.get("reset") else clean_columns(request.POST.getlist("columns"))
+    ListPreference.objects.update_or_create(
+        user=request.user, key=PREFERENCE_KEY,
+        defaults={"columns": list(columns), "compact": bool(request.POST.get("compact"))},
+    )
+    messages.success(request, "Kolommen opgeslagen.")
+    target = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        target = reverse("shipments:sea_list")
+    return redirect(target)
 
 
 class SeaDetailView(PermissionRequiredMixin, generic.DetailView):
