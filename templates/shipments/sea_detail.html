@@ -1,12 +1,14 @@
 {% extends "base.html" %}{% load portal %}
-{% block title %}{{ object.container_number }}{% endblock %}
+{% block title %}{{ object.container_number }}{% if perms.shipments.change_seashipment %}<div data-inline-edit data-url-template="{% url 'shipments:sea_inline' 0 %}" hidden>{% csrf_token %}</div>
+<script type="application/json" id="inline-specs">{{ inline_specs_json|safe }}</script>{% endif %}
+{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
     <div class="eyebrow"><a href="{% url 'shipments:sea_list' %}">Zeevracht</a> · <a href="{% url 'core:customer_detail' object.customer.pk %}">{{ object.customer }}</a></div>
     <h3 class="d-flex align-items-center gap-2 flex-wrap">{{ object.container_number|cnr }}
       <button class="btn btn-icon btn-sm" data-copy="{{ object.container_number }}" title="Containernummer kopiëren"><i class="bi bi-copy"></i></button>
-      {% badge object.status object.get_status_display %} {% badge object.inspection_status object.get_inspection_status_display %}
+      <span id="sea-badges" class="d-inline-flex gap-1">{% include "shipments/_sea_badges.html" %}</span>
     </h3>
   </div>
   <div class="page-actions">
@@ -36,39 +38,7 @@
 {% endif %}
 {% if object.tracking_last_error %}<div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-circle"></i> Laatste trackingpoging: {{ object.tracking_last_error }}</div>{% endif %}
 
-<!-- Reis in één oogopslag -->
-<div class="card mb-3"><div class="card-body">
-  <div class="row g-3 align-items-center">
-    <div class="col-lg-8">
-      <div class="voyage">
-        <div class="voyage-port" title="{{ object.port_of_loading|port }}">{{ object.port_of_loading|port_full|default:"Laadhaven ?" }} <span class="small text-body-secondary font-monospace">{{ object.port_of_loading }}</span><small>{% if object.departed_at %}vertrokken {{ object.departed_at|date:"j M" }}{% else %}vertrek onbekend{% endif %}</small></div>
-        <div class="voyage-track" title="{% if object.voyage_progress is not None %}{{ object.voyage_progress }}% van de reis{% endif %}">
-          {% if object.voyage_progress is not None %}<span style="width: {{ object.voyage_progress }}%"></span><div class="voyage-ship" style="left: {{ object.voyage_progress }}%"><i class="bi bi-water"></i></div>{% endif %}
-        </div>
-        <div class="voyage-port text-end" title="{{ object.port_of_discharge|port }}">{{ object.port_of_discharge|port_full }} <span class="small text-body-secondary font-monospace">{{ object.port_of_discharge }}</span><small>{{ object.terminal|default:"terminal onbekend" }}</small></div>
-      </div>
-      <div class="small text-body-secondary mt-2">
-        <i class="bi bi-life-preserver"></i> {{ object.shipping_line|default:"rederij onbekend" }} ·
-        <span{% if object.vessel_changed %} class="vessel-changed"{% endif %}>{{ object.vessel_name|default:"schip onbekend" }}</span>{% if object.vessel_imo %} (IMO {{ object.vessel_imo }}){% endif %}{% if object.voyage %} · reis <span class="font-monospace">{{ object.voyage }}</span>{% endif %}
-      </div>
-    </div>
-    <div class="col-lg-4">
-      <div class="d-flex gap-4 justify-content-lg-end">
-        <div>
-          <div class="small text-body-secondary">{% if object.ata %}Aangekomen{% else %}ETA{% endif %}</div>
-          {% if object.ata %}<div class="countdown text-success"><i class="bi bi-check2-circle"></i></div><div class="small">{{ object.ata|date:"D j M H:i" }}</div>
-          {% elif object.eta %}<div class="countdown">{% if object.days_to_eta is not None and object.days_to_eta >= 0 %}{{ object.days_to_eta }}<small class="fs-6 fw-normal text-body-secondary"> d</small>{% else %}<span class="text-warning-emphasis">!</span>{% endif %}</div><div class="small">{{ object.eta|date:"D j M H:i" }}{% if object.eta_delay_hours %} <span class="chip chip-{% if object.eta_delay_hours > 0 %}warning{% else %}info{% endif %}">{% if object.eta_delay_hours > 0 %}+{% endif %}{{ object.eta_delay_hours }}u</span>{% endif %}</div>
-          {% else %}<div class="countdown text-body-secondary">–</div><div class="small text-body-secondary">nog onbekend</div>{% endif %}
-        </div>
-        <div>
-          <div class="small text-body-secondary">Vrije dagen</div>
-          {% if object.free_days_left is not None %}<div class="countdown{% if object.free_days_left <= 0 %} text-danger{% elif object.free_days_left <= 2 %} text-warning-emphasis{% endif %}">{{ object.free_days_left }}<small class="fs-6 fw-normal text-body-secondary"> d</small></div><div class="small">t/m {{ object.free_time_until|date:"D j M" }}</div>
-          {% else %}<div class="countdown text-body-secondary">–</div><div class="small text-body-secondary">niet ingevuld</div>{% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-</div></div>
+{% include "shipments/_sea_voyage.html" %}
 
 <div class="row g-3">
   <div class="col-xl-8">
@@ -81,47 +51,8 @@
     </ul>
     <div class="tab-content card border-top-0" style="border-top-left-radius:0;border-top-right-radius:0">
       <div class="tab-pane fade show active p-3" id="tab-details">
-        <div class="row g-4">
-          <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Referenties</h6><dl class="kv">
-            <dt>Klantreferentie</dt><dd class="font-monospace">{{ object.customer_reference|default:"–" }}</dd>
-            <dt>Cory referentie</dt><dd class="font-monospace">{{ object.cory_reference|default:"–" }}</dd>
-            <dt>B/L</dt><dd class="font-monospace">{{ object.bl_number|default:"–" }}</dd>
-            <dt>Booking</dt><dd class="font-monospace">{{ object.booking_number|default:"–" }}</dd>
-            <dt>Type / zegel</dt><dd>{{ object.get_container_type_display }} · {{ object.seal_number|default:"–" }}</dd>
-            <dt>Behandelaar</dt><dd>{{ object.handler|default:"–" }}</dd>
-          </dl></div>
-          <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Lading</h6><dl class="kv">
-            <dt>Goederen</dt><dd>{{ object.goods_description|default:"–" }}</dd>
-            <dt>Temperatuur</dt><dd>{% if object.temperature_setpoint is not None %}{{ object.temperature_setpoint }} °C{% else %}–{% endif %}</dd>
-            <dt>Brutogewicht</dt><dd>{% if object.gross_weight_kg is not None %}{{ object.gross_weight_kg|floatformat:"-3g" }} kg{% else %}–{% endif %}</dd>
-            <dt>Colli</dt><dd>{% if object.packages %}{{ object.packages }} {{ object.package_type|lower }}{% else %}{{ object.package_type|default:"–" }}{% endif %}</dd>
-          </dl></div>
-          <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Reis</h6><dl class="kv">
-            <dt>Rederij</dt><dd>{{ object.shipping_line|default:"–" }}</dd>
-            <dt>Laadhaven</dt><dd>{{ object.port_of_loading|port|default:"–" }}</dd>
-            <dt>Loshaven</dt><dd>{{ object.port_of_discharge|port }}</dd>
-            <dt>Terminal</dt><dd>{{ object.terminal|default:"–" }}</dd>
-            <dt>Vertrokken</dt><dd>{{ object.departed_at|date:"D j M Y H:i"|default:"–" }}</dd>
-            <dt>Oorspr. ETA</dt><dd>{{ object.eta_original|date:"D j M Y H:i"|default:"–" }}</dd>
-            <dt>Gelost</dt><dd>{{ object.discharged_at|date:"D j M Y H:i"|default:"–" }}</dd>
-          </dl></div>
-          <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Keuring & douane</h6><dl class="kv">
-            <dt>Keuringsplichtig</dt><dd>{{ object.inspection_required|yesno:"ja,nee" }}</dd>
-            <dt>Keurpunt</dt><dd>{{ object.inspection_point|default:"–" }}{% if object.inspection_point.opening_hours %}<div class="small text-body-secondary">{{ object.inspection_point.opening_hours }}</div>{% endif %}</dd>
-            <dt>CHED</dt><dd class="font-monospace">{{ object.ched_number|default:"–" }}</dd>
-            <dt>Keuring gepland</dt><dd>{{ object.inspection_planned_at|date:"D j M H:i"|default:"–" }}</dd>
-            <dt>Douane vrij</dt><dd>{{ object.customs_cleared|yesno:"ja,nee" }}</dd>
-            <dt>Labonderzoek</dt><dd>{{ object.get_lab_status_display }}{% if object.lab_status != "geen" %}<div class="small text-body-secondary">{% if object.lab_sampled_at %}monster {{ object.lab_sampled_at|date:"j M H:i" }}{% endif %}{% if object.lab_status == "monster" and object.lab_expected_at %} · uitslag verwacht {{ object.lab_expected_at|date:"D j M" }}{% endif %}{% if object.lab_result_at %} · uitslag {{ object.lab_result_at|date:"j M H:i" }}{% endif %}{% if object.lab_notes %}<br>{{ object.lab_notes }}{% endif %}</div>{% endif %}</dd>
-          </dl></div>
-          <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Vrijgave & kosten</h6><dl class="kv">
-            <dt>Uithalen</dt><dd>{% with blockers=object.pickup_blockers %}{% if not blockers %}<span class="chip chip-success"><i class="bi bi-check2-circle"></i> klaar om uit te halen</span>{% else %}<span class="text-body-secondary">nog regelen:</span> {% for b in blockers %}<span class="chip chip-secondary">{{ b }}</span> {% endfor %}{% endif %}{% endwith %}</dd>
-            <dt>Rederij</dt><dd>{{ object.get_carrier_release_display }}{% if object.carrier_released_at %} <span class="small text-body-secondary">({{ object.carrier_released_at|date:"j M H:i" }})</span>{% endif %}</dd>
-            <dt>Pincode / release</dt><dd class="font-monospace">{{ object.release_reference|default:"–" }}{% if object.release_reference %} <button class="btn btn-icon btn-sm" data-copy="{{ object.release_reference }}" title="Kopiëren"><i class="bi bi-copy"></i></button>{% endif %}</dd>
-            <dt>Lokale kosten</dt><dd>{{ object.get_local_charges_display }}{% if object.local_charges_amount %} · {{ object.local_charges_amount|euro }}{% endif %}
-              <div class="small text-body-secondary">factuur rederij{% if object.invoice_requested_at %} · opgevraagd {{ object.invoice_requested_at|date:"j M" }}{% endif %}{% if object.invoice_received_at %} · ontvangen {{ object.invoice_received_at|date:"j M" }}{% endif %}{% if object.local_charges_paid_at %} · betaald {{ object.local_charges_paid_at|date:"j M" }}{% endif %}</div></dd>
-          </dl></div>
-          {% if object.notes %}<div class="col-12"><h6 class="text-body-secondary small text-uppercase">Opmerkingen</h6><div style="white-space:pre-wrap">{{ object.notes }}</div></div>{% endif %}
-        </div>
+        {% if perms.shipments.change_seashipment %}<div class="small text-body-secondary mb-3"><i class="bi bi-pencil"></i> Klik op een waarde om die direct aan te passen.</div>{% endif %}
+        {% include "shipments/_sea_details.html" %}
       </div>
       <div class="tab-pane fade p-3" id="tab-tracking">
         <div class="small text-body-secondary mb-3">Automatische tracking {% if object.tracking_enabled %}aan{% else %}uit{% endif %} · laatst gecontroleerd {{ object.tracking_last_checked|date:"j M H:i"|default:"nog niet" }}</div>
@@ -153,36 +84,7 @@
   </div>
 
   <div class="col-xl-4">
-    {% if perms.shipments.change_seashipment %}
-    <div class="card mb-3"><div class="card-header"><i class="bi bi-lightning"></i> Snel bijwerken</div>
-      <div class="card-body d-grid gap-2">
-        <form method="post" action="{% url 'shipments:sea_quick' object.pk %}" class="d-flex gap-2 align-items-center">{% csrf_token %}
-          <label class="small text-body-secondary" style="width:90px" for="q-status">Status</label>
-          <select id="q-status" name="status" class="form-select form-select-sm" data-plain onchange="this.form.submit()">{% for k, v in object.STATUS_CHOICES %}<option value="{{ k }}"{% if k == object.status %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-        </form>
-        {% if object.inspection_required %}
-        <form method="post" action="{% url 'shipments:sea_quick' object.pk %}" class="d-flex gap-2 align-items-center">{% csrf_token %}
-          <label class="small text-body-secondary" style="width:90px" for="q-insp">Keuring</label>
-          <select id="q-insp" name="inspection_status" class="form-select form-select-sm" data-plain onchange="this.form.submit()">{% for k, v in inspection_choices %}<option value="{{ k }}"{% if k == object.inspection_status %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-        </form>
-        {% endif %}
-        {% for name, label, choices, current in quick_selects %}
-        <form method="post" action="{% url 'shipments:sea_quick' object.pk %}" class="d-flex gap-2 align-items-center">{% csrf_token %}
-          <label class="small text-body-secondary" style="width:90px" for="q-{{ name }}">{{ label }}</label>
-          <select id="q-{{ name }}" name="{{ name }}" class="form-select form-select-sm" data-plain onchange="this.form.submit()">{% for k, v in choices %}<option value="{{ k }}"{% if k == current %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-        </form>
-        {% endfor %}
-        <form method="post" action="{% url 'shipments:sea_quick' object.pk %}" class="d-flex gap-2 align-items-center">{% csrf_token %}
-          <label class="small text-body-secondary" style="width:90px" for="q-lab">Lab</label>
-          <select id="q-lab" name="lab_status" class="form-select form-select-sm" data-plain onchange="this.form.submit()">{% for k, v in lab_choices %}<option value="{{ k }}"{% if k == object.lab_status %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-        </form>
-        <form method="post" action="{% url 'shipments:sea_quick' object.pk %}" class="d-flex gap-2 align-items-center">{% csrf_token %}
-          <span class="small text-body-secondary" style="width:90px">Douane</span>
-          <input type="hidden" name="customs_cleared" value="{% if object.customs_cleared %}0{% else %}1{% endif %}">
-          <button class="btn btn-sm {% if object.customs_cleared %}btn-success{% else %}btn-outline-secondary{% endif %} flex-grow-1">{% if object.customs_cleared %}<i class="bi bi-check2"></i> Douane vrij{% else %}Markeer douane vrij{% endif %}</button>
-        </form>
-      </div></div>
-    {% endif %}
+    {% include "shipments/_sea_attention.html" %}
 
     <div class="card mb-3"><div class="card-header"><i class="bi bi-truck"></i> Wegtransport</div>
       <div class="list-group list-group-flush">{% for r in road %}<a class="list-group-item list-group-item-action" href="{% url 'shipments:road_detail' r.pk %}"><div class="d-flex"><span>{{ r.carrier|default:"vervoerder ?" }}</span><span class="ms-auto">{% badge r.status r.get_status_display %}</span></div><div class="small text-body-secondary">{{ r.loading_at|date:"D j M H:i"|default:"laden ?" }} → {{ r.unloading_address|default:r.unloading_place|default:"?" }}</div>
@@ -215,4 +117,6 @@
   </div></div>
 </div>
 {% endif %}
+{% if perms.shipments.change_seashipment %}<div data-inline-edit data-url-template="{% url 'shipments:sea_inline' 0 %}" hidden>{% csrf_token %}</div>
+<script type="application/json" id="inline-specs">{{ inline_specs_json|safe }}</script>{% endif %}
 {% endblock %}

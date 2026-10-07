@@ -1,0 +1,2 @@
+<div id="sea-attention">{% if object.attention %}<div class="card mb-3"><div class="card-header"><i class="bi bi-exclamation-circle"></i> Aandacht</div>
+  <div class="card-body d-flex flex-wrap gap-1">{% for level, text in object.attention %}<span class="chip chip-{{ level }}">{{ text }}</span>{% endfor %}</div></div>{% endif %}</div>

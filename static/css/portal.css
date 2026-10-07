@@ -365,16 +365,21 @@ th[data-sort].desc::after { content: "\2193"; opacity: .9; }
 .route-mini-step.is-klaar { color: var(--bs-success-text-emphasis); }
 .route-mini-step.is-hier { color: var(--brand); font-weight: 600; }
 
-/* Direct bewerken in de lijst */
-td[data-edit] { position: relative; cursor: pointer; }
-td[data-edit]:hover, td[data-edit]:focus-visible { background: var(--brand-soft); outline: none; }
-td[data-edit]:hover::after, td[data-edit]:focus-visible::after { content: "\F4CB"; font-family: "bootstrap-icons"; position: absolute; top: 4px; right: 4px; font-size: .7rem; color: var(--brand); }
-td.is-editing { background: var(--app-surface) !important; }
-td.is-editing::after { display: none; }
-td.is-editing > :not(.inline-editor) { visibility: hidden; }
-.inline-editor { position: absolute; inset: 4px; z-index: 5; min-width: 170px; }
-.inline-editor .inline-hint { font-size: .68rem; color: var(--bs-secondary-color); background: var(--app-surface); padding: 1px 2px; white-space: nowrap; }
-td.is-saving { opacity: .5; }
-td.is-error { box-shadow: inset 0 0 0 2px var(--bs-danger); }
+/* Direct bewerken (lijsten en dossierpagina) */
+[data-edit] { position: relative; cursor: pointer; border-radius: 6px; }
+[data-edit]:hover, [data-edit]:focus-visible { background: var(--brand-soft); outline: none; }
+[data-edit]:hover::after, [data-edit]:focus-visible::after { content: "\F4CB"; font-family: "bootstrap-icons"; position: absolute; top: 3px; right: 4px; font-size: .7rem; color: var(--brand); }
+dd[data-edit], .kv-edit-block[data-edit] { padding: 2px 22px 2px 6px; margin-left: -6px; }
+.kv-edit-block[data-edit] { min-height: 2.5rem; border: 1px dashed var(--app-border); }
+[data-edit].is-editing { background: var(--app-surface) !important; }
+[data-edit].is-editing::after { display: none; }
+[data-edit].is-editing > :not(.inline-editor) { visibility: hidden; }
+.inline-editor { position: absolute; top: 2px; left: 2px; right: 2px; z-index: 6; min-width: 190px; }
+.inline-editor textarea { min-height: 6rem; }
+.inline-editor .inline-hint { font-size: .68rem; color: var(--bs-secondary-color); background: var(--app-surface); padding: 2px 4px; white-space: nowrap; border-radius: 0 0 6px 6px; box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,.08)); }
+[data-edit].is-saving { opacity: .5; }
+[data-edit].is-error { box-shadow: inset 0 0 0 2px var(--bs-danger); }
+[data-edit].cell-saved { animation: row-saved 1.6s ease-out; }
 tr.row-saved > td { animation: row-saved 1.6s ease-out; }
+.flatpickr-calendar { z-index: 2000; }
 @keyframes row-saved { from { background: var(--bs-success-bg-subtle); } to { background: transparent; } }

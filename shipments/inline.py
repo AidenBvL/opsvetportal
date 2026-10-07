@@ -8,8 +8,17 @@ from django.utils import timezone
 from .columns import SEA_COLUMNS
 from .models import RoadTransport, SeaShipment
 
+SEA_DETAIL_FIELDS = [
+    "customer", "customer_reference", "cory_reference", "handler", "status", "container_type", "seal_number", "bl_number",
+    "booking_number", "shipping_line", "vessel_name", "voyage", "port_of_loading", "port_of_discharge", "terminal",
+    "departed_at", "eta", "ata", "discharged_at", "free_time_until", "inspection_required", "inspection_point", "ched_number",
+    "inspection_status", "inspection_planned_at", "customs_status", "carrier_release", "carrier_released_at",
+    "release_reference", "local_charges", "local_charges_amount", "invoice_requested_at", "invoice_received_at",
+    "local_charges_paid_at", "lab_status", "lab_sampled_at", "lab_expected_at", "lab_result_at", "lab_notes",
+    "goods_description", "temperature_setpoint", "gross_weight_kg", "packages", "package_type", "notes",
+]
 EDITABLE = {
-    SeaShipment: [c.edit for c in SEA_COLUMNS if c.edit],
+    SeaShipment: list(dict.fromkeys([c.edit for c in SEA_COLUMNS if c.edit] + SEA_DETAIL_FIELDS)),
     RoadTransport: ["carrier", "loading_at", "loading_reference", "delivery_planned_at", "unloading_address",
                     "unloading_reference", "delivered_at", "cmr_number", "inspection_status", "status", "handler",
                     "empty_return_by"],
@@ -18,7 +27,7 @@ EDITABLE_FIELDS = EDITABLE[SeaShipment]  # voor bestaande aanroepen
 
 
 def _queryset(model, name, related):
-    from core.models import Address, InspectionPoint, RoadCarrier
+    from core.models import Address, Customer, InspectionPoint, RoadCarrier, ShippingLine
     from planning.models import Employee
 
     if related is Address:
@@ -28,7 +37,7 @@ def _queryset(model, name, related):
         elif name == "loading_address":
             qs = qs.exclude(kind="los")
         return qs.select_related("customer").order_by("name")
-    filtered = {Employee, InspectionPoint, RoadCarrier}
+    filtered = {Employee, InspectionPoint, RoadCarrier, Customer, ShippingLine}
     return related.objects.filter(active=True) if related in filtered else related.objects.all()
 
 
@@ -53,12 +62,15 @@ def field_specs(model=SeaShipment):
             kind = "datetime"
         elif isinstance(field, models.DateField):
             kind = "date"
-        elif isinstance(field, models.DecimalField):
+        elif isinstance(field, (models.DecimalField, models.IntegerField)):
             kind = "number"
+        elif isinstance(field, models.TextField):
+            kind = "textarea"
         else:
             kind = "text"
+        nullable = (field.null or field.blank) and not (isinstance(field, models.ForeignKey) and not field.null)
         specs[name] = {"label": str(field.verbose_name).capitalize(), "type": kind, "choices": _choices_for(model, field),
-                       "nullable": field.null or field.blank}
+                       "nullable": nullable}
     return specs
 
 

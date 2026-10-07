@@ -17,8 +17,8 @@
     <dt class="col-5">Zeevracht</dt><dd class="col-7">{% if object.sea_shipment %}<a href="{% url 'shipments:sea_detail' object.sea_shipment.pk %}">{{ object.sea_shipment }}</a>{% else %}-{% endif %}</dd>
     <dt class="col-5">Wegtransport</dt><dd class="col-7">{% if object.road_transport %}<a href="{% url 'shipments:road_detail' object.road_transport.pk %}">{{ object.road_transport }}</a>{% else %}-{% endif %}</dd>
     {% if object.meeting_item %}<dt class="col-5">Uit overleg</dt><dd class="col-7"><a href="{% url 'meetings:day' %}?datum={{ object.meeting_item.meeting.date|date:'Y-m-d' }}">{{ object.meeting_item.meeting }}</a></dd>{% endif %}
-    <dt class="col-5">Aangemaakt</dt><dd class="col-7">{{ object.created_at|date:"j M Y H:i" }} {% if object.created_by %}door {{ object.created_by }}{% endif %}</dd>
-    {% if object.completed_at %}<dt class="col-5">Afgerond</dt><dd class="col-7">{{ object.completed_at|date:"j M Y H:i" }}</dd>{% endif %}
+    <dt class="col-5">Aangemaakt</dt><dd class="col-7">{{ object.created_at|date:"d-m-Y H:i" }} {% if object.created_by %}door {{ object.created_by }}{% endif %}</dd>
+    {% if object.completed_at %}<dt class="col-5">Afgerond</dt><dd class="col-7">{{ object.completed_at|date:"d-m-Y H:i" }}</dd>{% endif %}
   </dl>
   {% if object.description %}<hr><div style="white-space:pre-wrap">{{ object.description }}</div>{% endif %}
   {% if object.resolution %}<hr><strong>Afhandeling</strong><div style="white-space:pre-wrap">{{ object.resolution }}</div>{% endif %}

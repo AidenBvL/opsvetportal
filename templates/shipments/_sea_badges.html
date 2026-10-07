@@ -1,0 +1,1 @@
+{% load portal %}{% badge object.status object.get_status_display %} {% badge object.inspection_status object.get_inspection_status_display %}{% if object.customs_status != "open" %} <span class="chip chip-{% if object.customs_status == "ingeklaard" %}success{% else %}info{% endif %}">{% if object.customs_status == "t1" %}T1{% else %}ingeklaard{% endif %}</span>{% endif %}

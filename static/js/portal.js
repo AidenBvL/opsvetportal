@@ -296,95 +296,164 @@
     });
   });
 
-  // Direct bewerken in de lijst: klik op een cel met data-edit, pas aan, Enter/kiezen = opslaan, Esc = annuleren.
+  // Datums als dd-mm-jjjj en tijden in 24 uur, onafhankelijk van de taal van browser/Windows.
+  // De server krijgt nog steeds JJJJ-MM-DD (en HH:MM) zoals een gewoon datumveld dat stuurt.
+  const pad = n => String(n).padStart(2, "0");
+  const parseLoose = str => {
+    const v = (str || "").trim();
+    let m = v.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})(?:[ T,]+(\d{1,2})[:.](\d{2}))?$/);
+    if (m) {
+      const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+      return new Date(year, Number(m[2]) - 1, Number(m[1]), Number(m[4] || 0), Number(m[5] || 0));
+    }
+    m = v.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] || 0), Number(m[5] || 0));
+    return undefined;
+  };
+  const makePicker = (input, withTime, extra = {}) => {
+    if (!window.flatpickr || input._flatpickr) return input._flatpickr;
+    input.type = "text";
+    return window.flatpickr(input, Object.assign({
+      locale: (window.flatpickr.l10ns && window.flatpickr.l10ns.nl) || "default",
+      allowInput: true, altInput: true, enableTime: withTime, time_24hr: true, minuteIncrement: 5,
+      dateFormat: withTime ? "Y-m-d\\TH:i" : "Y-m-d", altFormat: withTime ? "d-m-Y H:i" : "d-m-Y",
+      parseDate: (str, format) => parseLoose(str) || window.flatpickr.parseDate(str, format),
+      onReady: (_d, _s, fp) => { fp.altInput.placeholder = withTime ? "dd-mm-jjjj uu:mm" : "dd-mm-jjjj"; },
+    }, extra));
+  };
+  const enhanceDates = (root = document) => {
+    $$("input[type=date]", root).forEach(input => makePicker(input, false));
+    $$("input[type=datetime-local]", root).forEach(input => makePicker(input, true));
+  };
+  enhanceDates();
+  // Velden die later worden toegevoegd (bijv. een nieuwe tussenstop) ook omzetten.
+  new MutationObserver(records => records.forEach(r => r.addedNodes.forEach(n => { if (n.nodeType === 1) enhanceDates(n); })))
+    .observe(document.body, { childList: true, subtree: true });
+
+  // Direct bewerken: klik op een waarde met data-edit (lijst of dossierpagina), pas aan, opslaan zonder bewerkscherm.
   const inline = $("[data-inline-edit]");
   if (inline) {
     const specs = JSON.parse(($("#inline-specs") || {}).textContent || "{}");
     const token = ($("input[name=csrfmiddlewaretoken]", inline) || {}).value;
     const urlFor = pk => inline.dataset.urlTemplate.replace("/0/", `/${pk}/`);
-    const flash = (row, cls) => { row.classList.add(cls); setTimeout(() => row.classList.remove(cls), 1600); };
+    const fromHtml = html => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 
-    const save = async (td, value) => {
-      const row = td.closest("tr"), field = td.dataset.edit;
-      td.classList.add("is-saving");
+    const close = cell => {
+      const ed = $(".inline-editor", cell);
+      if (ed) { if (ed._picker) ed._picker.destroy(); ed.remove(); }
+      cell.classList.remove("is-editing");
+    };
+
+    const save = async (cell, value) => {
+      const scope = cell.closest("[data-row]"), field = cell.dataset.edit;
+      if (!cell.isConnected || cell._saving) return;
+      if (value === (cell.dataset.editValue || "")) { close(cell); return; }
+      cell._saving = true;
+      cell.classList.add("is-saving");
       try {
-        const body = new URLSearchParams({ field, value });
-        const res = await fetch(urlFor(row.dataset.row), { method: "POST", body, headers: { "X-CSRFToken": token, "X-Requested-With": "fetch" } });
+        const body = new URLSearchParams({ field, value, view: scope.dataset.inlineView || "list" });
+        const res = await fetch(urlFor(scope.dataset.row), { method: "POST", body, headers: { "X-CSRFToken": token, "X-Requested-With": "fetch" } });
         const data = await res.json().catch(() => ({ ok: false, error: "Opslaan mislukt." }));
         if (!data.ok) throw new Error(data.error || "Opslaan mislukt.");
-        const tmp = document.createElement("tbody");
-        tmp.innerHTML = data.html.trim();
-        const fresh = tmp.firstElementChild;
-        row.replaceWith(fresh);
-        flash(fresh, "row-saved");
-        const again = $(`td[data-edit="${field}"]`, fresh);
-        if (again) again.focus();
+        const fresh = fromHtml(data.html);
+        scope.replaceWith(fresh);
+        Object.entries(data.fragments || {}).forEach(([name, html]) => {
+          const el = document.getElementById(`sea-${name}`);
+          if (el) el.replaceWith(fromHtml(html));
+        });
+        fresh.classList.add("row-saved");
+        setTimeout(() => fresh.classList.remove("row-saved"), 1600);
+        const again = $(`[data-edit="${field}"]`, fresh);
+        if (again) { again.classList.add("cell-saved"); again.focus({ preventScroll: true }); }
       } catch (err) {
-        td.classList.remove("is-saving");
-        close(td);
-        td.classList.add("is-error");
-        td.title = err.message;
-        setTimeout(() => { td.classList.remove("is-error"); td.removeAttribute("title"); }, 4000);
+        cell._saving = false;
+        cell.classList.remove("is-saving");
+        close(cell);
+        cell.classList.add("is-error");
+        cell.title = err.message;
+        setTimeout(() => { cell.classList.remove("is-error"); cell.removeAttribute("title"); }, 5000);
       }
     };
 
-    const close = td => {
-      const ed = $(".inline-editor", td);
-      if (ed) ed.remove();
-      td.classList.remove("is-editing");
-    };
-
-    const open = td => {
-      const spec = specs[td.dataset.edit];
-      if (!spec || td.classList.contains("is-editing")) return;
-      const current = td.dataset.editValue || "";
-      if (spec.type === "bool") { save(td, current === "1" ? "0" : "1"); return; }
-      $$("td.is-editing").forEach(close);
+    const open = cell => {
+      const spec = specs[cell.dataset.edit];
+      if (!spec || cell.classList.contains("is-editing")) return;
+      const current = cell.dataset.editValue || "";
+      if (spec.type === "bool") { save(cell, current === "1" ? "0" : "1"); return; }
+      $$("[data-edit].is-editing").forEach(close);
+      const wrap = document.createElement("div");
+      wrap.className = "inline-editor";
       let input;
       if (spec.type === "select") {
         input = document.createElement("select");
         input.className = "form-select form-select-sm";
         const opts = (spec.nullable && !spec.choices.some(c => c[0] === "") ? [["", "–"]] : []).concat(spec.choices);
-        opts.forEach(([v, l]) => { const o = new Option(l, v, false, v === current); input.add(o); });
-        input.addEventListener("change", () => save(td, input.value));
+        opts.forEach(([v, l]) => input.add(new Option(l, v, false, v === current)));
+        input.addEventListener("change", () => save(cell, input.value));
+        input.addEventListener("blur", () => setTimeout(() => cell.classList.contains("is-editing") && close(cell), 200));
+      } else if (spec.type === "textarea") {
+        input = document.createElement("textarea");
+        input.className = "form-control form-control-sm";
+        input.rows = 4;
+        input.value = current;
+        input.addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(cell, input.value); } });
+        input.addEventListener("blur", () => setTimeout(() => cell.classList.contains("is-editing") && save(cell, input.value), 150));
       } else {
         input = document.createElement("input");
         input.className = "form-control form-control-sm";
-        input.type = { date: "date", datetime: "datetime-local", number: "number" }[spec.type] || "text";
+        input.type = spec.type === "number" ? "number" : "text";
         if (spec.type === "number") input.step = "any";
         input.value = current;
-        input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); save(td, input.value); } });
-        input.addEventListener("blur", () => setTimeout(() => {
-          if (!td.isConnected || !td.classList.contains("is-editing")) return;
-          if (input.value !== current) save(td, input.value); else close(td);
-        }, 150));
+        if (spec.type !== "date" && spec.type !== "datetime") {
+          input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); save(cell, input.value); } });
+          input.addEventListener("blur", () => setTimeout(() => cell.classList.contains("is-editing") && save(cell, input.value), 150));
+        }
       }
       input.setAttribute("aria-label", spec.label);
-      input.addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); close(td); td.focus(); } });
-      const wrap = document.createElement("div");
-      wrap.className = "inline-editor";
+      input.addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); close(cell); cell.focus(); } });
       wrap.appendChild(input);
-      if (spec.type !== "select") {
-        const hint = document.createElement("div");
-        hint.className = "inline-hint";
-        hint.textContent = "Enter = opslaan · Esc = annuleren";
-        wrap.appendChild(hint);
+      const hint = document.createElement("div");
+      hint.className = "inline-hint";
+      hint.textContent = spec.type === "select" ? "Kies om op te slaan · Esc = annuleren"
+        : spec.type === "textarea" ? "Ctrl+Enter of klik ernaast = opslaan · Esc = annuleren"
+        : spec.type === "date" || spec.type === "datetime" ? "Kies een datum of typ dd-mm-jjjj · Esc = annuleren"
+        : "Enter = opslaan · Esc = annuleren";
+      if (spec.nullable && (spec.type === "date" || spec.type === "datetime")) {
+        const clear = document.createElement("button");
+        clear.type = "button"; clear.className = "btn btn-link btn-sm p-0 ms-2"; clear.textContent = "leegmaken";
+        clear.addEventListener("mousedown", e => { e.preventDefault(); save(cell, ""); });
+        hint.appendChild(clear);
       }
-      td.classList.add("is-editing");
-      td.appendChild(wrap);
+      wrap.appendChild(hint);
+      cell.classList.add("is-editing");
+      cell.appendChild(wrap);
+      if (spec.type === "date" || spec.type === "datetime") {
+        const withTime = spec.type === "datetime";
+        // Waarde in hetzelfde formaat als de server terugstuurt (JJJJ-MM-DD of JJJJ-MM-DDTHH:MM).
+        wrap._picker = makePicker(input, withTime, {
+          onClose: (_dates, str) => { if (cell.classList.contains("is-editing")) save(cell, str); },
+        });
+        if (wrap._picker) {
+          wrap._picker.altInput.classList.add("form-control-sm");
+          wrap._picker.altInput.focus();
+          wrap._picker.open();
+          return;
+        }
+      }
       input.focus();
+      if (input.select && input.type === "text") input.select();
       if (input.showPicker && spec.type === "select") { try { input.showPicker(); } catch (e) { /* niet overal ondersteund */ } }
     };
 
     document.addEventListener("click", e => {
-      const td = e.target.closest("td[data-edit]");
-      if (!td || e.target.closest("a, .inline-editor")) return;
+      const cell = e.target.closest("[data-edit]");
+      if (!cell || e.target.closest("a, button, .inline-editor")) return;
       e.preventDefault();
-      open(td);
+      open(cell);
     });
     document.addEventListener("keydown", e => {
-      const td = e.target.matches && e.target.matches("td[data-edit]") ? e.target : null;
-      if (td && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(td); }
+      const cell = e.target.matches && e.target.matches("[data-edit]") ? e.target : null;
+      if (cell && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(cell); }
     });
   }
 

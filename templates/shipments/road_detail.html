@@ -84,7 +84,7 @@
     <dt>CHED</dt><dd class="font-monospace">{{ object.ched_number|default:"–" }}</dd>
     <dt>Keuring gepland</dt><dd>{{ object.inspection_planned_at|date:"D j M H:i"|default:"–" }}</dd>
     <dt>Lege retour naar</dt><dd>{{ object.empty_return_place|default:"–" }}</dd>
-    <dt>Retour uiterlijk</dt><dd>{{ object.empty_return_by|date:"D j M Y"|default:"–" }}</dd>
+    <dt>Retour uiterlijk</dt><dd>{{ object.empty_return_by|date:"D d-m-Y"|default:"–" }}</dd>
     <dt>Behandelaar</dt><dd>{{ object.handler|default:"–" }}</dd>
   </dl></div></div></div>
 

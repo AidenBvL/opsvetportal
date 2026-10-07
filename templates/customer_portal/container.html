@@ -20,7 +20,7 @@
 <dt class="col-5">Keuringsplichtig</dt><dd class="col-7">{{ s.inspection_required|yesno:"ja,nee" }}</dd>
 <dt class="col-5">Keuringsstatus</dt><dd class="col-7">{% badge s.inspection_status s.get_inspection_status_display %}</dd>
 <dt class="col-5">Keuring gepland</dt><dd class="col-7">{{ s.inspection_planned_at|date:"j F H:i"|default:"-" }}</dd>
-<dt class="col-5">Douane vrij</dt><dd class="col-7">{{ s.customs_cleared|yesno:"ja,nee" }}</dd>
+<dt class="col-5">Douane</dt><dd class="col-7">{{ s.get_customs_status_display }}</dd>
 </dl></div></div>
 {% if road %}<div class="card mb-3"><div class="card-header">Transport</div><ul class="list-group list-group-flush small">{% for r in road %}<li class="list-group-item">{{ r.loading_at|date:"j M H:i" }} → {{ r.unloading_place }} {% badge r.status r.get_status_display %}</li>{% endfor %}</ul></div>{% endif %}
 <div class="card"><div class="card-header">ETA-historie</div><ul class="list-group list-group-flush small">{% for u in updates %}<li class="list-group-item">{{ u.checked_at|date:"j M H:i" }}: ETA {{ u.eta|date:"j M H:i" }} · {{ u.vessel_name }}</li>{% empty %}<li class="list-group-item text-muted">-</li>{% endfor %}</ul></div>

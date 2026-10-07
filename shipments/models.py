@@ -82,15 +82,21 @@ class SeaShipment(TimeStampedModel):
     ched_number = models.CharField("CHED-nummer (TRACES)", max_length=60, blank=True)
     inspection_status = models.CharField("keuringsstatus", max_length=20, choices=INSPECTION_STATUS_CHOICES, default="aan_te_melden")
     inspection_planned_at = models.DateTimeField("keuring gepland op", null=True, blank=True)
-    customs_cleared = models.BooleanField("douane vrij", default=False)
-    # Vrijgave bij de rederij en lokale kosten: pas als dit rond is kan de container worden uitgehaald.
-    carrier_release = models.CharField("vrijgave rederij", max_length=20, choices=[
-        ("open", "Nog niet vrijgegeven"),
-        ("aangevraagd", "Vrijgave aangevraagd"),
-        ("vrij", "Vrijgegeven"),
+    customs_status = models.CharField("douane", max_length=20, choices=[
+        ("open", "Nog niet ingeklaard"),
+        ("t1", "T1 (onder douaneverband)"),
+        ("ingeklaard", "Ingeklaard"),
     ], default="open")
-    carrier_released_at = models.DateTimeField("vrijgegeven op", null=True, blank=True)
-    release_reference = models.CharField("pincode / releasenummer", max_length=60, blank=True)
+    # Vrijgave bij de rederij en lokale kosten: pas als dit rond is kan de container worden uitgehaald.
+    # Release / delivery order van de rederij (tegenwoordig meestal via Portbase).
+    carrier_release = models.CharField("release / delivery order", max_length=20, choices=[
+        ("open", "Nog geen release"),
+        ("aangevraagd", "Release aangevraagd"),
+        ("vrij", "Release / DO ontvangen"),
+    ], default="open")
+    carrier_released_at = models.DateTimeField("release ontvangen op", null=True, blank=True)
+    release_reference = models.CharField("referentie release / DO", max_length=60, blank=True,
+                                         help_text="Bijv. het delivery-ordernummer of de Portbase-referentie.")
     # Lokale kosten = de factuur van de rederij (THC, documentkosten, ...): opvragen, ontvangen, betalen.
     local_charges = models.CharField("lokale kosten (factuur rederij)", max_length=20, choices=[
         ("onbekend", "Factuur nog niet opgevraagd"),
@@ -182,10 +188,10 @@ class SeaShipment(TimeStampedModel):
         """Wat nog geregeld moet worden voordat de container bij de terminal kan worden uitgehaald."""
         blockers = []
         if self.carrier_release != "vrij":
-            blockers.append("rederij")
+            blockers.append("release")
         if self.local_charges not in ("betaald", "geen"):
             blockers.append("kosten")
-        if not self.customs_cleared:
+        if self.customs_status == "open":
             blockers.append("douane")
         if self.inspection_required and self.inspection_status != "vrijgegeven":
             blockers.append("keuring")
@@ -272,7 +278,7 @@ class SeaShipment(TimeStampedModel):
         elif self.lab_status == "afgekeurd":
             flags.append(("danger", "Labuitslag afgekeurd"))
         if soon and self.carrier_release != "vrij":
-            flags.append(("warning", "Vrijgave rederij regelen"))
+            flags.append(("warning", "Release / DO regelen"))
         if self.local_charges == "ontvangen":
             flags.append(("warning", "Lokale kosten betalen"))
         elif self.local_charges == "onbekend" and soon:
@@ -367,7 +373,7 @@ class RoadTransport(TimeStampedModel):
         "core.Address", verbose_name="laadadres uit adresboek", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
     loading_place = models.CharField("laadadres", max_length=250, blank=True, help_text="Bijv. de terminal waar de container staat.")
-    loading_reference = models.CharField("referentie ophalen", max_length=100, blank=True, help_text="Pincode / release- of pick-upreferentie.")
+    loading_reference = models.CharField("referentie ophalen", max_length=100, blank=True, help_text="Release- of pick-upreferentie (Portbase).")
     loading_at = models.DateTimeField("laden gepland", null=True, blank=True)
     unloading_address = models.ForeignKey(
         "core.Address", verbose_name="losadres uit adresboek", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"

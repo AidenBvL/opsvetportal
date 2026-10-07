@@ -1,0 +1,62 @@
+{% load portal %}{# Tabblad Gegevens van een zeevrachtdossier. Klik op een waarde om die direct aan te passen. #}
+<div class="row g-4" data-row="{{ object.pk }}" data-inline-view="detail">
+  <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Referenties</h6><dl class="kv kv-edit">
+    <dt>Klant</dt><dd{% edit_attrs object "customer" %}>{{ object.customer }}</dd>
+    <dt>Klantreferentie</dt><dd class="font-monospace"{% edit_attrs object "customer_reference" %}>{{ object.customer_reference|default:"–" }}</dd>
+    <dt>Cory referentie</dt><dd class="font-monospace"{% edit_attrs object "cory_reference" %}>{{ object.cory_reference|default:"–" }}</dd>
+    <dt>B/L</dt><dd class="font-monospace"{% edit_attrs object "bl_number" %}>{{ object.bl_number|default:"–" }}</dd>
+    <dt>Booking</dt><dd class="font-monospace"{% edit_attrs object "booking_number" %}>{{ object.booking_number|default:"–" }}</dd>
+    <dt>Containertype</dt><dd{% edit_attrs object "container_type" %}>{{ object.get_container_type_display }}</dd>
+    <dt>Zegel</dt><dd class="font-monospace"{% edit_attrs object "seal_number" %}>{{ object.seal_number|default:"–" }}</dd>
+    <dt>Behandelaar</dt><dd{% edit_attrs object "handler" %}>{{ object.handler|default:"–" }}</dd>
+    <dt>Status</dt><dd{% edit_attrs object "status" %}>{% badge object.status object.get_status_display %}</dd>
+  </dl></div>
+  <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Lading</h6><dl class="kv kv-edit">
+    <dt>Goederen</dt><dd{% edit_attrs object "goods_description" %}>{{ object.goods_description|default:"–" }}</dd>
+    <dt>Temperatuur</dt><dd{% edit_attrs object "temperature_setpoint" %}>{% if object.temperature_setpoint is not None %}{{ object.temperature_setpoint }} °C{% else %}–{% endif %}</dd>
+    <dt>Brutogewicht</dt><dd{% edit_attrs object "gross_weight_kg" %}>{% if object.gross_weight_kg is not None %}{{ object.gross_weight_kg|floatformat:"-3g" }} kg{% else %}–{% endif %}</dd>
+    <dt>Colli</dt><dd{% edit_attrs object "packages" %}>{{ object.packages|default:"–" }}</dd>
+    <dt>Verpakking</dt><dd{% edit_attrs object "package_type" %}>{{ object.package_type|default:"–" }}</dd>
+  </dl></div>
+  <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Reis</h6><dl class="kv kv-edit">
+    <dt>Rederij</dt><dd{% edit_attrs object "shipping_line" %}>{{ object.shipping_line|default:"–" }}</dd>
+    <dt>Zeeschip</dt><dd{% edit_attrs object "vessel_name" %}>{{ object.vessel_name|default:"–" }}</dd>
+    <dt>Reis</dt><dd class="font-monospace"{% edit_attrs object "voyage" %}>{{ object.voyage|default:"–" }}</dd>
+    <dt>Laadhaven</dt><dd{% edit_attrs object "port_of_loading" %}>{{ object.port_of_loading|port|default:"–" }}</dd>
+    <dt>Loshaven</dt><dd{% edit_attrs object "port_of_discharge" %}>{{ object.port_of_discharge|port }}</dd>
+    <dt>Terminal</dt><dd{% edit_attrs object "terminal" %}>{{ object.terminal|default:"–" }}</dd>
+    <dt>Vertrokken</dt><dd{% edit_attrs object "departed_at" %}>{{ object.departed_at|date:"D d-m-Y H:i"|default:"–" }}</dd>
+    <dt>ETA</dt><dd{% edit_attrs object "eta" %}>{{ object.eta|date:"D d-m-Y H:i"|default:"–" }}{% if object.eta_original and object.eta_original != object.eta %}<div class="small text-body-secondary">oorspronkelijk {{ object.eta_original|date:"d-m-Y H:i" }}</div>{% endif %}</dd>
+    <dt>ATA</dt><dd{% edit_attrs object "ata" %}>{{ object.ata|date:"D d-m-Y H:i"|default:"–" }}</dd>
+    <dt>Gelost</dt><dd{% edit_attrs object "discharged_at" %}>{{ object.discharged_at|date:"D d-m-Y H:i"|default:"–" }}</dd>
+    <dt>Vrije dagen t/m</dt><dd{% edit_attrs object "free_time_until" %}>{{ object.free_time_until|date:"D d-m-Y"|default:"–" }}{% if object.free_days_left is not None %} <span class="chip chip-{% if object.free_days_left <= 0 %}danger{% elif object.free_days_left <= 2 %}warning{% else %}secondary{% endif %}">{{ object.free_days_left }} d</span>{% endif %}</dd>
+  </dl></div>
+  <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Keuring & douane</h6><dl class="kv kv-edit">
+    <dt>Keuringsplichtig</dt><dd{% edit_attrs object "inspection_required" %}>{{ object.inspection_required|yesno:"ja,nee" }}</dd>
+    <dt>Keurpunt</dt><dd{% edit_attrs object "inspection_point" %}>{{ object.inspection_point|default:"–" }}{% if object.inspection_point.opening_hours %}<div class="small text-body-secondary">{{ object.inspection_point.opening_hours }}</div>{% endif %}</dd>
+    <dt>CHED</dt><dd class="font-monospace"{% edit_attrs object "ched_number" %}>{{ object.ched_number|default:"–" }}</dd>
+    <dt>Keuring</dt><dd{% edit_attrs object "inspection_status" %}>{% badge object.inspection_status object.get_inspection_status_display %}</dd>
+    <dt>Keuring gepland</dt><dd{% edit_attrs object "inspection_planned_at" %}>{{ object.inspection_planned_at|date:"D d-m-Y H:i"|default:"–" }}</dd>
+    <dt>Douane</dt><dd{% edit_attrs object "customs_status" %}>{% if object.customs_status == "ingeklaard" %}<span class="chip chip-success">Ingeklaard</span>{% elif object.customs_status == "t1" %}<span class="chip chip-info">T1</span>{% else %}Nog niet ingeklaard{% endif %}</dd>
+  </dl></div>
+  <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Release & kosten</h6><dl class="kv kv-edit">
+    <dt>Uithalen</dt><dd>{% with blockers=object.pickup_blockers %}{% if not blockers %}<span class="chip chip-success"><i class="bi bi-check2-circle"></i> klaar om uit te halen</span>{% else %}<span class="text-body-secondary">nog regelen:</span> {% for b in blockers %}<span class="chip chip-secondary">{{ b }}</span> {% endfor %}{% endif %}{% endwith %}</dd>
+    <dt>Release / DO</dt><dd{% edit_attrs object "carrier_release" %}>{{ object.get_carrier_release_display }}</dd>
+    <dt>Release ontvangen</dt><dd{% edit_attrs object "carrier_released_at" %}>{{ object.carrier_released_at|date:"D d-m-Y H:i"|default:"–" }}</dd>
+    <dt>Ref. release / DO</dt><dd class="font-monospace"{% edit_attrs object "release_reference" %}>{{ object.release_reference|default:"–" }}</dd>
+    <dt>Lokale kosten</dt><dd{% edit_attrs object "local_charges" %}>{{ object.get_local_charges_display }}</dd>
+    <dt>Bedrag</dt><dd{% edit_attrs object "local_charges_amount" %}>{{ object.local_charges_amount|euro|default:"–" }}</dd>
+    <dt>Factuur opgevraagd</dt><dd{% edit_attrs object "invoice_requested_at" %}>{{ object.invoice_requested_at|date:"d-m-Y H:i"|default:"–" }}</dd>
+    <dt>Factuur ontvangen</dt><dd{% edit_attrs object "invoice_received_at" %}>{{ object.invoice_received_at|date:"d-m-Y H:i"|default:"–" }}</dd>
+    <dt>Betaald</dt><dd{% edit_attrs object "local_charges_paid_at" %}>{{ object.local_charges_paid_at|date:"d-m-Y H:i"|default:"–" }}</dd>
+  </dl></div>
+  <div class="col-md-6"><h6 class="text-body-secondary small text-uppercase">Labonderzoek</h6><dl class="kv kv-edit">
+    <dt>Status</dt><dd{% edit_attrs object "lab_status" %}>{{ object.get_lab_status_display }}</dd>
+    <dt>Monster genomen</dt><dd{% edit_attrs object "lab_sampled_at" %}>{{ object.lab_sampled_at|date:"D d-m-Y H:i"|default:"–" }}</dd>
+    <dt>Uitslag verwacht</dt><dd{% edit_attrs object "lab_expected_at" %}>{{ object.lab_expected_at|date:"D d-m-Y"|default:"–" }}</dd>
+    <dt>Uitslag ontvangen</dt><dd{% edit_attrs object "lab_result_at" %}>{{ object.lab_result_at|date:"D d-m-Y H:i"|default:"–" }}</dd>
+    <dt>Opmerking</dt><dd{% edit_attrs object "lab_notes" %}>{{ object.lab_notes|default:"–" }}</dd>
+  </dl></div>
+  <div class="col-12"><h6 class="text-body-secondary small text-uppercase">Opmerkingen</h6>
+    <div class="kv-edit-block"{% edit_attrs object "notes" %} style="white-space:pre-wrap">{{ object.notes|default:"Klik om een opmerking toe te voegen." }}</div></div>
+</div>

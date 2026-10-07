@@ -227,3 +227,15 @@ def edit_value(obj, field):
     from shipments.inline import edit_value as value
 
     return value(obj, field)
+
+
+@register.simple_tag(takes_context=True)
+def edit_attrs(context, obj, field):
+    """Maakt een waarde klikbaar om direct aan te passen (alleen met wijzigingsrecht)."""
+    from shipments.inline import edit_value as value
+
+    request = context.get("request")
+    perm = f"{obj._meta.app_label}.change_{obj._meta.model_name}"
+    if request is None or not request.user.has_perm(perm):
+        return ""
+    return format_html(' data-edit="{}" data-edit-value="{}" tabindex="0"', field, value(obj, field))

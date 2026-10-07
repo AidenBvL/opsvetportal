@@ -7,7 +7,7 @@
 <div class="row g-3"><div class="col-md-4"><div class="card"><div class="card-body small"><dl class="row mb-0">
 <dt class="col-5">Soort</dt><dd class="col-7">{{ object.get_doc_type_display }}</dd>
 <dt class="col-5">Klant</dt><dd class="col-7">{{ object.customer|default:"-" }}</dd>
-<dt class="col-5">Geüpload</dt><dd class="col-7">{{ object.created_at|date:"j M Y H:i" }} {{ object.uploaded_by|default:"" }}</dd>
+<dt class="col-5">Geüpload</dt><dd class="col-7">{{ object.created_at|date:"d-m-Y H:i" }} {{ object.uploaded_by|default:"" }}</dd>
 <dt class="col-5">Dossiers</dt><dd class="col-7">{% for s in object.sea_shipments.all %}<a href="{% url 'shipments:sea_detail' s.pk %}">{{ s.container_number }}</a> {% endfor %}{% for r in object.road_transports.all %}<a href="{% url 'shipments:road_detail' r.pk %}"><i class="bi bi-truck"></i> {{ r }}</a> {% endfor %}{% if not object.sea_shipments.exists and not object.road_transports.exists %}-{% endif %}</dd>
 </dl></div></div></div>
 <div class="col-md-8"><div class="card"><div class="card-header">Herkende tekst</div><pre class="card-body small mb-0" style="max-height:60vh;overflow:auto;white-space:pre-wrap">{{ object.extracted_text|default:"(geen tekst)" }}</pre></div></div></div>
